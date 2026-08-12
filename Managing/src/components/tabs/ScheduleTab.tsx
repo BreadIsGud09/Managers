@@ -88,8 +88,8 @@ export function ScheduleTab() {
   const fetchList = useServerFn(listStudents);
   const fetchAtt = useServerFn(listAttendanceRange);
   const fetchChanges = useServerFn(listScheduleChanges);
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() as any });
-  const { data: changes = [] } = useQuery<ScheduleChange[]>({ queryKey: ["schedule-changes"], queryFn: () => fetchChanges() as any });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() });
+  const { data: changes = [] } = useQuery<ScheduleChange[]>({ queryKey: ["schedule-changes"], queryFn: () => fetchChanges() });
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [cls, setCls] = useState<ClassType>("Piano");
@@ -102,7 +102,7 @@ export function ScheduleTab() {
 
   const { data: attRows = [] } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance-range", fromISO, toISO],
-    queryFn: () => fetchAtt({ data: { from: fromISO, to: toISO } }) as any,
+    queryFn: () => fetchAtt({ data: { from: fromISO, to: toISO } }),
   });
 
   // Map: studentId -> map<dateISO, status>
@@ -320,7 +320,7 @@ function ReserveCard({ students, weekStart }: { students: Student[]; weekStart: 
 
   const { data: rows = [] } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance-range", range.from, range.to],
-    queryFn: () => fetchAtt({ data: { from: range.from, to: range.to } }) as any,
+    queryFn: () => fetchAtt({ data: { from: range.from, to: range.to } }),
   });
 
   const byStudent = useMemo(() => {
@@ -337,7 +337,6 @@ function ReserveCard({ students, weekStart }: { students: Student[]; weekStart: 
     }
     for (const v of m.values()) v.sort();
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, students, scope]);
 
   return (
@@ -447,7 +446,7 @@ function ReserveDialog({ students }: { students: Student[] }) {
 
   const mut = useMutation({
     mutationFn: async () => {
-      for (const d of dates) await setAtt({ data: { student_id: studentId, date: d, status: "Bảo lưu", note: "Bảo lưu theo lịch" } as any });
+      for (const d of dates) await setAtt({ data: { student_id: studentId, date: d, status: "Bảo lưu", note: "Bảo lưu theo lịch" } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["attendance-range"] });
@@ -539,13 +538,13 @@ function ReserveRowActions({ student, dates }: { student: Student; dates: string
   }, [student, startDate, count]);
 
   const save = useMutation({
-    mutationFn: () => replaceFn({ data: { student_id: student.id, old_dates: dates, dates: newDates } } as any),
+    mutationFn: () => replaceFn({ data: { student_id: student.id, old_dates: dates, dates: newDates } }),
     onSuccess: () => { refresh(); toast.success("Đã cập nhật lịch bảo lưu"); setOpen(false); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: () => delFn({ data: { student_id: student.id, dates } } as any),
+    mutationFn: () => delFn({ data: { student_id: student.id, dates } }),
     onSuccess: () => { refresh(); toast.success("Đã xóa lịch bảo lưu"); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -600,7 +599,7 @@ function ScheduleChangeCard({ students, changes }: { students: Student[]; change
   const qc = useQueryClient();
   const delFn = useServerFn(deleteScheduleChange);
   const del = useMutation({
-    mutationFn: (id: string) => delFn({ data: { id } } as any),
+    mutationFn: (id: string) => delFn({ data: { id } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["schedule-changes"] }); toast.success("Đã xóa bản ghi đổi lịch"); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -686,11 +685,11 @@ function ChangeScheduleDialog({ students }: { students: Student[] }) {
   const effInvalid = slots.length > 0 && !slots.some((s) => s.day === effDow);
 
   const mut = useMutation({
-    mutationFn: () => changeFn({ data: { student_id: studentId, effective_from: effectiveFrom, new_slots: slots, reason: reason.trim() || null } } as any),
-    onSuccess: (r: any) => {
+    mutationFn: () => changeFn({ data: { student_id: studentId, effective_from: effectiveFrom, new_slots: slots, reason: reason.trim() || null } }),
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["schedule-changes"] });
       qc.invalidateQueries({ queryKey: ["students"] });
-      toast.success(`Đã đổi lịch. Ngày kết thúc mới: ${fmtDate(r?.end_date ?? "")}`);
+      toast.success(`Đã đổi lịch. Ngày kết thúc mới: ${fmtDate(result.end_date)}`);
       setOpen(false);
     },
     onError: (e: Error) => toast.error(e.message),

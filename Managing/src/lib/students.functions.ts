@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import type { Database } from "@/integrations/supabase/types";
+import type { ScheduleChange, Student } from "@/lib/shared";
+
 const ClassType = z.enum(["Piano", "Múa", "Vẽ"]);
 const StudentStatus = z.enum(["Đang học", "Bảo lưu", "Hoàn thành", "Chuẩn bị"]);
 const AttendanceStatus = z.enum(["Đi học", "Nghỉ có phép", "Nghỉ không phép", "Bảo lưu"]);
@@ -18,11 +21,43 @@ async function admin() {
   return supabaseAdmin;
 }
 
+type StudentRow = Database["public"]["Tables"]["students"]["Row"];
+type ScheduleChangeRow = Database["public"]["Tables"]["schedule_changes"]["Row"];
+
+/** Converts database JSON fields into the DTO consumed by feature components. */
+function toStudent(row: StudentRow): Student {
+  return {
+    id: row.id,
+    name: row.name,
+    age: row.age,
+    class_type: row.class_type,
+    tuition: row.tuition,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    status: row.status,
+    reserve_days: row.reserve_days,
+    total_sessions: row.total_sessions,
+    schedule_days: row.schedule_days,
+    sessions_per_day: row.sessions_per_day === 2 ? 2 : 1,
+    schedule_slots: z.array(ScheduleSlot).parse(row.schedule_slots ?? []),
+    course_index: row.course_index,
+    person_id: row.person_id,
+  };
+}
+
+function toScheduleChange(row: ScheduleChangeRow): ScheduleChange {
+  return {
+    ...row,
+    old_slots: z.array(ScheduleSlot).parse(row.old_slots ?? []),
+    new_slots: z.array(ScheduleSlot).parse(row.new_slots ?? []),
+  };
+}
+
 export const listStudents = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("students").select("*").order("created_at", { ascending: false });
+  const { data, error } = await sb.from("students").select("*").order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).map(toStudent);
 });
 
 const StudentInput = z.object({
@@ -66,14 +101,14 @@ function derive(slots: { day: number }[]) {
 }
 
 export const upsertStudent = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => StudentInput.parse(d))
+  .validator((d: unknown) => StudentInput.parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
     const { schedule_days, sessions_per_day } = derive(data.schedule_slots);
     // Hồ sơ học sinh: dùng person_id nếu có, nếu không thì gộp theo tên + tuổi
     let person_id = data.person_id ?? null;
     if (!person_id) {
-      const { data: found } = await (sb as any)
+      const { data: found } = await sb
         .from("people")
         .select("id")
         .ilike("name", data.name.trim())
@@ -81,7 +116,7 @@ export const upsertStudent = createServerFn({ method: "POST" })
         .maybeSingle();
       if (found?.id) person_id = found.id;
       else {
-        const { data: created, error: pe } = await (sb as any)
+        const { data: created, error: pe } = await sb
           .from("people")
           .insert({ name: data.name.trim(), age: data.age })
           .select("id")
@@ -90,65 +125,65 @@ export const upsertStudent = createServerFn({ method: "POST" })
         person_id = created?.id ?? null;
       }
     } else {
-      await (sb as any).from("people").update({ name: data.name.trim(), age: data.age }).eq("id", person_id);
+      await sb.from("people").update({ name: data.name.trim(), age: data.age }).eq("id", person_id);
     }
     const payload = { ...data, person_id, schedule_days, sessions_per_day };
     if (data.id) {
-      const { error } = await (sb as any).from("students").update(payload).eq("id", data.id);
+      const { error } = await sb.from("students").update(payload).eq("id", data.id);
       if (error) throw new Error(error.message);
       return { ok: true, id: data.id };
     }
     const { id: _ignore, ...insert } = payload;
-    const { data: row, error } = await (sb as any).from("students").insert(insert).select("id").single();
+    const { data: row, error } = await sb.from("students").insert(insert).select("id").single();
     if (error) throw new Error(error.message);
     return { ok: true, id: row?.id as string };
   });
 
 export const deleteStudent = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("students").delete().eq("id", data.id);
+    const { error } = await sb.from("students").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const listSchedule = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("class_schedule").select("*").order("day_of_week").order("start_time");
+  const { data, error } = await sb.from("class_schedule").select("*").order("day_of_week").order("start_time");
   if (error) throw new Error(error.message);
   return data ?? [];
 });
 
 export const listAttendance = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ date: z.string() }).parse(d))
+  .validator((d: unknown) => z.object({ date: z.string() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: rows, error } = await (sb as any).from("attendance").select("*").eq("date", data.date);
+    const { data: rows, error } = await sb.from("attendance").select("*").eq("date", data.date);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
 
 export const listAttendanceRange = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ from: z.string(), to: z.string() }).parse(d))
+  .validator((d: unknown) => z.object({ from: z.string(), to: z.string() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: rows, error } = await (sb as any).from("attendance").select("*").gte("date", data.from).lte("date", data.to);
+    const { data: rows, error } = await sb.from("attendance").select("*").gte("date", data.from).lte("date", data.to);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
 
 export const listAttendanceByStudent = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ student_id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ student_id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: rows, error } = await (sb as any).from("attendance").select("*").eq("student_id", data.student_id);
+    const { data: rows, error } = await sb.from("attendance").select("*").eq("student_id", data.student_id);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
 
 export const setAttendance = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({
       student_id: z.string().uuid(),
       date: z.string(),
@@ -166,16 +201,16 @@ export const setAttendance = createServerFn({ method: "POST" })
       note: data.note ?? null,
       makeup_date: data.makeup_date ?? null,
     };
-    const { error } = await (sb as any).from("attendance").upsert(payload, { onConflict: "student_id,date" });
+    const { error } = await sb.from("attendance").upsert(payload, { onConflict: "student_id,date" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const deleteAttendance = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ student_id: z.string().uuid(), date: z.string() }).parse(d))
+  .validator((d: unknown) => z.object({ student_id: z.string().uuid(), date: z.string() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("attendance").delete().eq("student_id", data.student_id).eq("date", data.date);
+    const { error } = await sb.from("attendance").delete().eq("student_id", data.student_id).eq("date", data.date);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -184,7 +219,7 @@ export const deleteAttendance = createServerFn({ method: "POST" })
 /** ===== Hồ sơ học sinh ===== */
 export const listPeople = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("people").select("*").order("name");
+  const { data, error } = await sb.from("people").select("*").order("name");
   if (error) throw new Error(error.message);
   return data ?? [];
 });
@@ -192,16 +227,16 @@ export const listPeople = createServerFn({ method: "GET" }).handler(async () => 
 /** ===== Đổi lịch học (giữ lịch sử) ===== */
 export const listScheduleChanges = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any)
+  const { data, error } = await sb
     .from("schedule_changes")
     .select("*")
     .order("effective_from", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).map(toScheduleChange);
 });
 
 export const changeSchedule = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({
       student_id: z.string().uuid(),
       effective_from: z.string(),
@@ -212,18 +247,18 @@ export const changeSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { computeEndDate, slotsPerDayMap } = await import("@/lib/shared");
     const sb = await admin();
-    const { data: st, error: e1 } = await (sb as any).from("students").select("*").eq("id", data.student_id).single();
+    const { data: st, error: e1 } = await sb.from("students").select("*").eq("id", data.student_id).single();
     if (e1 || !st) throw new Error(e1?.message ?? "Không tìm thấy khóa học");
 
-    const oldSlots = (st.schedule_slots ?? []) as any[];
+    const oldSlots = z.array(ScheduleSlot).parse(st.schedule_slots ?? []);
     // Số buổi đã học trước ngày hiệu lực (1 giờ = 1 buổi)
-    const { data: att } = await (sb as any)
+    const { data: att } = await sb
       .from("attendance")
       .select("date,status")
       .eq("student_id", data.student_id)
       .gte("date", st.start_date)
       .lt("date", data.effective_from);
-    const perDay = slotsPerDayMap(oldSlots as any);
+    const perDay = slotsPerDayMap(oldSlots);
     let used = 0;
     for (const r of att ?? []) {
       if (r.status !== "Đi học") continue;
@@ -231,9 +266,9 @@ export const changeSchedule = createServerFn({ method: "POST" })
       used += perDay.get(dow) ?? 1;
     }
     const remain = Math.max(1, (st.total_sessions ?? 0) - used);
-    const newEnd = computeEndDate(data.effective_from, data.new_slots as any, remain) ?? st.end_date;
+    const newEnd = computeEndDate(data.effective_from, data.new_slots, remain) ?? st.end_date;
 
-    const { error: e2 } = await (sb as any).from("schedule_changes").insert({
+    const { error: e2 } = await sb.from("schedule_changes").insert({
       student_id: data.student_id,
       effective_from: data.effective_from,
       old_slots: oldSlots,
@@ -243,7 +278,7 @@ export const changeSchedule = createServerFn({ method: "POST" })
     if (e2) throw new Error(e2.message);
 
     const { schedule_days, sessions_per_day } = derive(data.new_slots);
-    const { error: e3 } = await (sb as any)
+    const { error: e3 } = await sb
       .from("students")
       .update({ schedule_slots: data.new_slots, schedule_days, sessions_per_day, end_date: newEnd })
       .eq("id", data.student_id);
@@ -252,22 +287,22 @@ export const changeSchedule = createServerFn({ method: "POST" })
   });
 
 export const deleteScheduleChange = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("schedule_changes").delete().eq("id", data.id);
+    const { error } = await sb.from("schedule_changes").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 /** ===== Bảo lưu: sửa / xóa ===== */
 export const deleteReserveDates = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({ student_id: z.string().uuid(), dates: z.array(z.string()).min(1) }).parse(d),
   )
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any)
+    const { error } = await sb
       .from("attendance")
       .delete()
       .eq("student_id", data.student_id)
@@ -278,7 +313,7 @@ export const deleteReserveDates = createServerFn({ method: "POST" })
   });
 
 export const replaceReserveDates = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({
       student_id: z.string().uuid(),
       old_dates: z.array(z.string()),
@@ -289,7 +324,7 @@ export const replaceReserveDates = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sb = await admin();
     if (data.old_dates.length > 0) {
-      const { error } = await (sb as any)
+      const { error } = await sb
         .from("attendance")
         .delete()
         .eq("student_id", data.student_id)
@@ -300,11 +335,11 @@ export const replaceReserveDates = createServerFn({ method: "POST" })
     const rows = data.dates.map((d) => ({
       student_id: data.student_id,
       date: d,
-      status: "Bảo lưu",
+      status: "Bảo lưu" as const,
       note: data.note ?? "Bảo lưu theo lịch",
       makeup_date: null,
     }));
-    const { error: e2 } = await (sb as any).from("attendance").upsert(rows, { onConflict: "student_id,date" });
+    const { error: e2 } = await sb.from("attendance").upsert(rows, { onConflict: "student_id,date" });
     if (e2) throw new Error(e2.message);
     return { ok: true };
   });

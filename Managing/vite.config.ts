@@ -7,6 +7,13 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    build: {
+      // Feature screens are lazy chunks; the remaining shared runtime is ~551 kB
+      // minified (~162 kB gzip), so use a threshold that reflects that baseline.
+      chunkSizeWarningLimit: 600,
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

@@ -11,9 +11,12 @@ function normalizeMonth(m: string) {
   return m.slice(0, 7) + "-01";
 }
 
+const FinanceKind = z.enum(["thu", "chi"]);
+const IncomeType = z.enum(["hoc_phi", "khac"]);
+
 export const listExpenseCategories = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("expense_categories").select("*").order("sort_order");
+  const { data, error } = await sb.from("expense_categories").select("*").order("sort_order");
   if (error) throw new Error(error.message);
   return data ?? [];
 });
@@ -22,20 +25,23 @@ export const listFinanceEntries = createServerFn({ method: "GET" }).handler(asyn
   const sb = await admin();
   if (!sb) throw new Error("Supabase admin client not available");
 
-  
-  const { data, error } = await (sb as any)
+  const { data, error } = await sb
     .from("finance_entries")
     .select("*")
     .order("month", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    ...row,
+    kind: FinanceKind.parse(row.kind),
+    income_type: IncomeType.nullable().parse(row.income_type),
+  }));
 });
 
 const EntryInput = z.object({
   id: z.string().uuid().optional(),
   month: z.string(),
-  kind: z.enum(["thu", "chi"]),
+  kind: FinanceKind,
   category: z.string().trim().min(1).max(200),
   amount: z.number().min(0),
   note: z.string().max(500).nullable().optional(),
@@ -44,7 +50,7 @@ const EntryInput = z.object({
   unit_amount: z.number().min(0).default(0),
 
   class_type: z.string().max(20).nullable().optional(),
-  income_type: z.enum(["hoc_phi", "khac"]).nullable().optional(),
+  income_type: IncomeType.nullable().optional(),
   student_name: z.string().max(120).nullable().optional(),
   course_label: z.string().max(30).nullable().optional(),
   term_start: z.string().nullable().optional(),
@@ -69,11 +75,11 @@ export const upsertFinanceEntry = createServerFn({ method: "POST" })
       paid_date: data.paid_date || null,
     };
     if (data.id) {
-      const { error } = await (sb as any).from("finance_entries").update(payload).eq("id", data.id);
+      const { error } = await sb.from("finance_entries").update(payload).eq("id", data.id);
       if (error) throw new Error(error.message);
     } else {
       const { id: _i, ...ins } = payload;
-      const { error } = await (sb as any).from("finance_entries").insert(ins);
+      const { error } = await sb.from("finance_entries").insert(ins);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
@@ -83,7 +89,7 @@ export const deleteFinanceEntry = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("finance_entries").delete().eq("id", data.id);
+    const { error } = await sb.from("finance_entries").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

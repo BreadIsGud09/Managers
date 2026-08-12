@@ -37,7 +37,9 @@ Important directories and files:
 
 | Path | Responsibility |
 | --- | --- |
-| `src/routes/index.tsx` | Main page, navigation tabs, Telegram settings UI |
+| `src/routes/index.tsx` | Route metadata and the main page shell |
+| `src/components/app/AppTabs.tsx` | Responsive navigation and lazy feature boundaries |
+| `src/components/settings` | Settings-specific UI and data flows |
 | `src/components/tabs` | Feature screens |
 | `src/components/ui` | Reusable Radix/shadcn-style UI primitives |
 | `src/lib/*.functions.ts` | Server-side queries, validation, and mutations |
@@ -163,6 +165,7 @@ npm install
 npm run dev       # Local app, currently configured for port 8080
 npm run build
 npm run lint
+npm run typecheck
 npm run format
 ```
 
@@ -196,3 +199,115 @@ On Windows PowerShell systems that block `npm.ps1`, use `npm.cmd`, for example
 5. Add or update the feature component under `src/components/tabs`.
 6. Use TanStack Query keys consistently and invalidate affected queries after mutations.
 7. Run lint, build, and a local workflow check before deployment.
+
+## 11. Maintainability Pattern
+
+Use a feature-oriented, functional React architecture. Do not wrap feature
+components in classes or create service classes just to reduce file length.
+Hooks, typed functions, and small components compose more naturally with React
+and TanStack Query.
+
+The intended dependency direction is:
+
+```text
+route shell
+  -> app navigation
+  -> feature screen
+  -> feature hook or event handler
+  -> validated server function
+  -> typed Supabase client
+  -> database
+```
+
+Keep each layer focused:
+
+- **Route:** URL, metadata, loader, and page shell. It should not contain a
+  feature form or mutation.
+- **App navigation:** selects the feature and owns lazy-loading boundaries. It
+  should not know feature business rules.
+- **Feature screen:** composes cards, tables, dialogs, and feature hooks.
+- **Feature component:** owns one interaction, such as editing a payment or
+  changing a schedule.
+- **Server function:** represents one use case, validates input, performs the
+  database operation, and returns a stable typed result.
+- **Shared domain module:** contains types and pure business calculations that
+  are useful in more than one feature.
+
+When a feature screen grows beyond roughly 300-400 lines, extract by behavior,
+not by arbitrary line ranges. Good extraction boundaries are:
+
+1. A dialog with its own form state and mutation.
+2. A table/card with a well-defined props interface.
+3. A reusable calculation that can become a pure function.
+4. A query/mutation group that can become a feature hook.
+
+Keep extracted code near its feature. For example:
+
+```text
+src/components/tabs/attendance/
+  AttendanceByDate.tsx
+  AttendanceByStudent.tsx
+  AttendanceBackfillDialog.tsx
+```
+
+Avoid a global `services` folder that mixes unrelated domains. The existing
+`*.functions.ts` modules are already the server-side use-case boundary.
+
+## 12. Server Function Contract
+
+Every mutation endpoint should follow the same sequence:
+
+1. Define a Zod schema for serialized input.
+2. Attach it with `createServerFn(...).validator(...)`.
+3. Import the server-only Supabase client inside the handler boundary.
+4. Use the generated database types instead of casting the client to `any`.
+5. Normalize JSON columns into domain DTOs before returning them to React.
+6. Throw a user-safe `Error` when Supabase returns an error.
+
+This makes the server function a typed anti-corruption layer: database storage
+types such as `Json` do not leak into UI components. `listStudents`,
+`listScheduleChanges`, `listLearningLogs`, and `listFinanceEntries` are current
+examples of output normalization.
+
+Query keys are part of a feature contract too. A mutation should invalidate the
+same root key used by the corresponding query. Keep a key constant next to the
+feature when several operations share it.
+
+## 13. Commenting Guidelines
+
+Comments should explain **why** code exists, especially for business rules,
+security boundaries, compatibility behavior, or non-obvious framework behavior.
+Do not comment syntax that is already clear from the code.
+
+Useful comment:
+
+```ts
+// Legacy database statuses remain readable, but all new writes use the current workflow.
+```
+
+Unhelpful comment:
+
+```ts
+// Set status to active.
+setStatus("active");
+```
+
+Use a short JSDoc comment on exported domain helpers or components when their
+responsibility is not obvious from the name. Keep detailed operational and
+architecture explanations in this guide instead of duplicating them in every
+file.
+
+## 14. Current Build Notes
+
+- Feature tabs are loaded with `React.lazy`, so opening one feature does not
+  initially download all other feature screens. Radix Tabs still unmounts an
+  inactive panel, preserving the prior lifecycle behavior.
+- Vite may report that `vite-tsconfig-paths` can be replaced by native
+  `resolve.tsconfigPaths`. That plugin is currently injected by
+  `@lovable.dev/vite-tanstack-config`, not by this repository's Vite config.
+- Nitro may report that `inlineDynamicImports` is ignored when code splitting is
+  enabled. This also originates in the build preset. Revisit both messages when
+  upgrading the Lovable preset rather than patching generated dependencies.
+- The configured chunk warning threshold is 600 kB because the remaining shared
+  framework runtime is about 551 kB minified and 162 kB gzip; feature chunks are
+  substantially smaller.

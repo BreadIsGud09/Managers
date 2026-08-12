@@ -42,8 +42,8 @@ import { deletePayment, listPayments, upsertPayment } from "@/lib/tuition.functi
 export function TuitionTab() {
   const fetchList = useServerFn(listStudents);
   const fetchPay = useServerFn(listPayments);
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() as any });
-  const { data: payments = [] } = useQuery<TuitionPayment[]>({ queryKey: ["payments"], queryFn: () => fetchPay() as any });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() });
+  const { data: payments = [] } = useQuery<TuitionPayment[]>({ queryKey: ["payments"], queryFn: () => fetchPay() });
 
   const now = new Date();
   const [month, setMonth] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -108,7 +108,7 @@ export function TuitionTab() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-[185px] pr-2" />
-            <Select value={cls} onValueChange={(v) => setCls(v as any)}>
+            <Select value={cls} onValueChange={(value) => setCls(value as "Tất cả" | ClassType)}>
               <SelectTrigger className="w-auto min-w-[140px]"><SelectValue /></SelectTrigger>
 
               <SelectContent>
@@ -288,7 +288,7 @@ function EditPaymentDialog({ existing, student, trigger }: { existing: TuitionPa
           course_index: Number(courseIndex),
           schedule_slots: student.schedule_slots ?? [],
           person_id: student.person_id ?? null,
-        } as any });
+        } });
       }
       await save({ data: {
         id: existing.id,
@@ -298,7 +298,7 @@ function EditPaymentDialog({ existing, student, trigger }: { existing: TuitionPa
         paid_date: paidDate,
         ky_index: Number(courseIndex),
         note: note || null,
-      } as any });
+      } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payments"] });
@@ -510,7 +510,7 @@ function RecordPaymentDialog({ students, trigger }: { students: Student[]; trigg
       const endDate = form.end_date || autoEnd || "";
       // Khóa tiếp theo mà khóa hiện tại vẫn đang học → "Chuẩn bị"
       const status = mode === "next" && base && base.status === "Đang học" ? "Chuẩn bị" : "Đang học";
-      const res: any = await saveStudent({ data: {
+      const result = await saveStudent({ data: {
         name: form.name.trim(),
         age: Number(form.age),
         class_type: form.class_type,
@@ -523,8 +523,8 @@ function RecordPaymentDialog({ students, trigger }: { students: Student[]; trigg
         course_index: Number(form.course_index),
         schedule_slots: form.schedule_slots,
         person_id: mode === "new" ? null : (base?.person_id ?? null),
-      } as any });
-      const newId = res?.id as string;
+      } });
+      const newId = result.id;
       if (!newId) throw new Error("Không lấy được mã học sinh vừa tạo");
       await savePayment({ data: {
         student_id: newId,
@@ -533,7 +533,7 @@ function RecordPaymentDialog({ students, trigger }: { students: Student[]; trigg
         paid_date: paidDate,
         ky_index: Number(form.course_index),
         note: null,
-      } as any });
+      } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payments"] });

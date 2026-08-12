@@ -16,7 +16,7 @@ export function exportXlsx(fileBase: string, sheets: Sheet[]) {
     const widths = (s.rows[0] ?? []).map((_, i) => ({
       wch: Math.min(40, Math.max(10, ...s.rows.map((r) => String(r[i] ?? "").length + 2))),
     }));
-    (ws as any)["!cols"] = widths;
+    ws["!cols"] = widths;
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
   }
   XLSX.writeFile(wb, `${fileBase}-${stamp()}.xlsx`);

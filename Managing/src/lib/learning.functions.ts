@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import type { LearningLog } from "@/lib/shared";
+
 const ClassType = z.enum(["Piano", "Múa", "Vẽ"]);
 const Attachment = z.object({
   kind: z.enum(["image", "video", "link"]),
@@ -15,13 +17,18 @@ async function admin() {
 
 export const listLearningLogs = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any)
+  const { data, error } = await sb
     .from("learning_logs")
     .select("*")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).map(
+    (row): LearningLog => ({
+      ...row,
+      attachments: z.array(Attachment).parse(row.attachments ?? []),
+    }),
+  );
 });
 
 const LogInput = z.object({
@@ -49,10 +56,10 @@ export const upsertLearningLog = createServerFn({ method: "POST" })
       is_class_wide: data.is_class_wide,
     };
     if (data.id) {
-      const { error } = await (sb as any).from("learning_logs").update(payload).eq("id", data.id);
+      const { error } = await sb.from("learning_logs").update(payload).eq("id", data.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await (sb as any).from("learning_logs").insert(payload);
+      const { error } = await sb.from("learning_logs").insert(payload);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
@@ -62,7 +69,7 @@ export const deleteLearningLog = createServerFn({ method: "POST" })
   .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("learning_logs").delete().eq("id", data.id);
+    const { error } = await sb.from("learning_logs").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

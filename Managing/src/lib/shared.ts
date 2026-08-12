@@ -1,5 +1,7 @@
 export type ClassType = "Piano" | "Múa" | "Vẽ";
-export type StudentStatus = "Đang học" | "Bảo lưu" | "Hoàn thành" | "Chuẩn bị";
+// The last two values are retained for rows created before the current status workflow.
+export type StudentStatus = "Đang học" | "Bảo lưu" | "Hoàn thành" | "Chuẩn bị" | "Nghỉ phép" | "Kết thúc";
+export type EditableStudentStatus = Exclude<StudentStatus, "Nghỉ phép" | "Kết thúc">;
 export type AttendanceStatus = "Đi học" | "Nghỉ có phép" | "Nghỉ không phép" | "Bảo lưu";
 
 export const STUDENT_STATUSES: StudentStatus[] = ["Đang học", "Chuẩn bị", "Bảo lưu", "Hoàn thành"];
@@ -85,6 +87,23 @@ export interface TuitionPayment {
   paid_date: string;
   ky_index: number;
   note: string | null;
+}
+
+export type LearningAttachment = {
+  kind: "image" | "video" | "link";
+  url: string;
+  label?: string | null;
+};
+
+export interface LearningLog {
+  id: string;
+  student_id: string | null;
+  class_type: ClassType;
+  date: string;
+  title: string;
+  content: string | null;
+  attachments: LearningAttachment[];
+  is_class_wide: boolean;
 }
 
 export const CLASSES: ClassType[] = ["Piano", "Múa", "Vẽ"];

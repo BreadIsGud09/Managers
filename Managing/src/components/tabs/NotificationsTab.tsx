@@ -22,8 +22,8 @@ export function NotificationsTab() {
   const todayISO = toLocalISO(today);
   const dow = today.getDay();
 
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() as any });
-  const { data: attRows = [] } = useQuery<AttendanceRow[]>({ queryKey: ["attendance", todayISO], queryFn: () => fetchAtt({ data: { date: todayISO } }) as any });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() });
+  const { data: attRows = [] } = useQuery<AttendanceRow[]>({ queryKey: ["attendance", todayISO], queryFn: () => fetchAtt({ data: { date: todayISO } }) });
 
   const todayItems = useMemo(() => {
     const items: Array<{ s: Student; slot: ScheduleSlot }> = [];

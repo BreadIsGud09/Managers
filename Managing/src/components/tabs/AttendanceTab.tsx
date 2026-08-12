@@ -23,6 +23,7 @@ import {
   slotsPerDayMap,
   toLocalISO,
   type AttendanceStatus,
+  type AttendanceRow,
   type ClassType,
   type ScheduleSlot,
   type Student,
@@ -62,10 +63,10 @@ function ByDateView() {
   const setAtt = useServerFn(setAttendance);
   const qc = useQueryClient();
 
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() as any });
-  const { data: attRows = [] } = useQuery<any[]>({
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() });
+  const { data: attRows = [] } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance", date],
-    queryFn: () => fetchAtt({ data: { date } }) as any,
+    queryFn: () => fetchAtt({ data: { date } }),
   });
 
   const attMap = useMemo(() => {
@@ -97,7 +98,7 @@ function ByDateView() {
 
   const mut = useMutation({
     mutationFn: (v: { student_id: string; status: AttendanceStatus; note?: string | null; makeup_date?: string | null }) =>
-      setAtt({ data: { ...v, date } as any }),
+      setAtt({ data: { ...v, date } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance", date] }),
     onError: (e: Error) => toast.error(e.message),
   });
@@ -129,7 +130,7 @@ function ByDateView() {
     if (missing.length === 0) return;
     (async () => {
       for (const s of missing) {
-        try { await setAtt({ data: { student_id: s.id, date, status: "Đi học", note: null, makeup_date: null } as any }); }
+        try { await setAtt({ data: { student_id: s.id, date, status: "Đi học", note: null, makeup_date: null } }); }
         catch { /* ignore */ }
       }
       qc.invalidateQueries({ queryKey: ["attendance", date] });
@@ -382,7 +383,7 @@ function BackfillButton({ students }: { students: Student[] }) {
             status: r.status,
             note: null,
             makeup_date: null,
-          } as any,
+          },
         });
         ok++;
       } catch {
@@ -547,7 +548,7 @@ function ByStudentView() {
   const [search, setSearch] = useState("");
   const [studentId, setStudentId] = useState<string>("");
 
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() as any });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchList() });
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -565,9 +566,9 @@ function ByStudentView() {
 
   const student = useMemo(() => (students as Student[]).find((s) => s.id === studentId), [students, studentId]);
 
-  const { data: attRows = [], isLoading } = useQuery<any[]>({
+  const { data: attRows = [], isLoading } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance-by-student", studentId],
-    queryFn: () => fetchByStudent({ data: { student_id: studentId } }) as any,
+    queryFn: () => fetchByStudent({ data: { student_id: studentId } }),
     enabled: !!studentId,
   });
 
@@ -639,12 +640,12 @@ function ByStudentView() {
 
   const setMut = useMutation({
     mutationFn: (v: { date: string; status: AttendanceStatus; note?: string | null; makeup_date?: string | null }) =>
-      setAtt({ data: { student_id: studentId, ...v } as any }),
+      setAtt({ data: { student_id: studentId, ...v } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance-by-student", studentId] }),
     onError: (e: Error) => toast.error(e.message),
   });
   const delMut = useMutation({
-    mutationFn: (date: string) => delAtt({ data: { student_id: studentId, date } as any }),
+    mutationFn: (date: string) => delAtt({ data: { student_id: studentId, date } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance-by-student", studentId] }),
     onError: (e: Error) => toast.error(e.message),
   });

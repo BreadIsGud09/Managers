@@ -6,9 +6,21 @@ async function admin() {
   return supabaseAdmin;
 }
 
+type ScheduleSlot = { day: number; start: string; end: string };
+
+function isScheduleSlot(value: unknown): value is ScheduleSlot {
+  if (typeof value !== "object" || value === null) return false;
+  const slot = value as Record<string, unknown>;
+  return typeof slot.day === "number" && typeof slot.start === "string" && typeof slot.end === "string";
+}
+
+function readScheduleSlots(value: unknown): ScheduleSlot[] {
+  return Array.isArray(value) ? value.filter(isScheduleSlot) : [];
+}
+
 export const getTelegramStatus = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("telegram_settings").select("bot_token,chat_id").eq("id", 1).maybeSingle();
+  const { data, error } = await sb.from("telegram_settings").select("bot_token,chat_id").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
   return {
     configured: Boolean(data?.bot_token && data?.chat_id),
@@ -18,7 +30,7 @@ export const getTelegramStatus = createServerFn({ method: "GET" }).handler(async
 });
 
 export const saveTelegramConfig = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     z.object({
       bot_token: z.string().trim().min(10).max(200),
       chat_id: z.string().trim().min(1).max(50),
@@ -26,7 +38,7 @@ export const saveTelegramConfig = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { error } = await (sb as any).from("telegram_settings").upsert({
+    const { error } = await sb.from("telegram_settings").upsert({
       id: 1,
       bot_token: data.bot_token,
       chat_id: data.chat_id,
@@ -38,7 +50,7 @@ export const saveTelegramConfig = createServerFn({ method: "POST" })
 
 async function sendTelegram(text: string) {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("telegram_settings").select("bot_token,chat_id").eq("id", 1).maybeSingle();
+  const { data, error } = await sb.from("telegram_settings").select("bot_token,chat_id").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data?.bot_token || !data?.chat_id) {
     throw new Error("Chưa cấu hình Telegram Bot Token và Chat ID");
@@ -48,9 +60,11 @@ async function sendTelegram(text: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: data.chat_id, text, parse_mode: "HTML" }),
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || (body as any)?.ok === false) {
-    throw new Error(`Telegram lỗi: ${(body as any)?.description ?? res.statusText}`);
+  const body: unknown = await res.json().catch(() => null);
+  const telegramResponse = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+  if (!res.ok || telegramResponse?.ok === false) {
+    const description = typeof telegramResponse?.description === "string" ? telegramResponse.description : res.statusText;
+    throw new Error(`Telegram lỗi: ${description}`);
   }
   return { ok: true };
 }
@@ -63,13 +77,13 @@ export const sendTodayScheduleTelegram = createServerFn({ method: "POST" }).hand
   const today = new Date();
   const dow = today.getDay();
 
-  const { data: students, error } = await (sb as any).from("students").select("*").eq("status", "Đang học");
+  const { data: students, error } = await sb.from("students").select("*").eq("status", "Đang học");
   if (error) throw new Error(error.message);
 
   type SlotItem = { name: string; class_type: string; start: string; end: string };
   const items: SlotItem[] = [];
-  for (const s of (students ?? []) as any[]) {
-    const slots: Array<{ day: number; start: string; end: string }> = Array.isArray(s.schedule_slots) ? s.schedule_slots : [];
+  for (const s of students ?? []) {
+    const slots = readScheduleSlots(s.schedule_slots);
     for (const sl of slots) if (sl.day === dow) items.push({ name: s.name, class_type: s.class_type, start: sl.start, end: sl.end });
   }
   items.sort((a, b) => a.start.localeCompare(b.start));
@@ -98,14 +112,14 @@ export const sendTodayScheduleTelegram = createServerFn({ method: "POST" }).hand
 
 export const sendExpiringTelegram = createServerFn({ method: "POST" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await (sb as any).from("students").select("*").eq("status", "Đang học");
+  const { data, error } = await sb.from("students").select("*").eq("status", "Đang học");
   if (error) throw new Error(error.message);
 
   const now = new Date();
   const in5 = new Date();
   in5.setDate(now.getDate() + 5);
 
-  const soon = ((data ?? []) as any[]).filter((s) => {
+  const soon = (data ?? []).filter((s) => {
     const end = new Date(s.end_date);
     return end >= new Date(now.toDateString()) && end <= in5;
   });
@@ -124,18 +138,17 @@ export const sendExpiringTelegram = createServerFn({ method: "POST" }).handler(a
 
 /** Điểm danh đúng giờ: liệt kê học sinh đã điểm danh 'Đi học' trong ngày. */
 export const sendAttendanceReportTelegram = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ date: z.string() }).parse(d))
+  .validator((d: unknown) => z.object({ date: z.string() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
     const [{ data: att }, { data: students }] = await Promise.all([
-      (sb as any).from("attendance").select("*").eq("date", data.date),
-      (sb as any).from("students").select("*"),
+      sb.from("attendance").select("*").eq("date", data.date),
+      sb.from("students").select("*"),
     ]);
-    const stuMap = new Map<string, any>();
-    for (const s of (students ?? []) as any[]) stuMap.set(s.id, s);
+    const stuMap = new Map((students ?? []).map((student) => [student.id, student]));
 
     const dow = new Date(data.date + "T00:00:00").getDay();
-    const attended = ((att ?? []) as any[]).filter((r) => r.status === "Đi học");
+    const attended = (att ?? []).filter((row) => row.status === "Đi học");
     let text = `✅ <b>Điểm danh đúng giờ - ${new Date(data.date + "T00:00:00").toLocaleDateString("vi-VN")}</b>\n\n`;
     if (attended.length === 0) {
       text += "Chưa có học sinh nào điểm danh đi học.";
@@ -143,7 +156,7 @@ export const sendAttendanceReportTelegram = createServerFn({ method: "POST" })
       for (const a of attended) {
         const s = stuMap.get(a.student_id);
         if (!s) continue;
-        const slot = ((s.schedule_slots ?? []) as any[]).find((x) => x.day === dow);
+        const slot = readScheduleSlots(s.schedule_slots).find((candidate) => candidate.day === dow);
         const range = slot ? `${slot.start}–${slot.end}` : "";
         text += `👤 <b>${s.name}</b> · Lớp ${s.class_type}${range ? ` · ⏰ ${range}` : ""}\n`;
       }
@@ -152,5 +165,5 @@ export const sendAttendanceReportTelegram = createServerFn({ method: "POST" })
   });
 
 export const sendCustomTelegram = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ text: z.string().trim().min(1).max(4000) }).parse(d))
+  .validator((d: unknown) => z.object({ text: z.string().trim().min(1).max(4000) }).parse(d))
   .handler(async ({ data }) => sendTelegram(data.text));

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -37,10 +37,10 @@ export function FinanceTab() {
   const fetchCats = useServerFn(listExpenseCategories);
   const fetchStudents = useServerFn(listStudents);
 
-  const { data: payments = [] } = useQuery<TuitionPayment[]>({ queryKey: ["payments"], queryFn: () => fetchPayments() as any });
-  const { data: entries = [] } = useQuery<Entry[]>({ queryKey: ["finance-entries"], queryFn: () => fetchEntries() as any });
-  const { data: cats = [] } = useQuery<Category[]>({ queryKey: ["expense-cats"], queryFn: () => fetchCats() as any });
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchStudents() as any });
+  const { data: payments = [] } = useQuery<TuitionPayment[]>({ queryKey: ["payments"], queryFn: () => fetchPayments() });
+  const { data: entries = [] } = useQuery<Entry[]>({ queryKey: ["finance-entries"], queryFn: () => fetchEntries() });
+  const { data: cats = [] } = useQuery<Category[]>({ queryKey: ["expense-cats"], queryFn: () => fetchCats() });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchStudents() });
 
   const now = new Date();
   const [view, setView] = useState<"month" | "year">("month");
@@ -50,14 +50,23 @@ export function FinanceTab() {
 
   const stuMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const period = view === "month" ? month : year;
-  const inPeriod = (iso: string) => (view === "month" ? iso.slice(0, 7) === month : iso.slice(0, 4) === year);
-  const matchClass = (c: string | null | undefined) => cls === "Tất cả" || !c || c === cls;
+  const inPeriod = useCallback(
+    (iso: string) => (view === "month" ? iso.slice(0, 7) === month : iso.slice(0, 4) === year),
+    [view, month, year],
+  );
+  const matchClass = useCallback(
+    (classType: string | null | undefined) => cls === "Tất cả" || !classType || classType === cls,
+    [cls],
+  );
 
   const paidRows = useMemo(
     () => payments.filter((p) => inPeriod(p.month) && (cls === "Tất cả" || stuMap.get(p.student_id)?.class_type === cls)),
-    [payments, view, month, year, cls, stuMap],
+    [payments, cls, stuMap, inPeriod],
   );
-  const periodEntries = useMemo(() => entries.filter((e) => inPeriod(e.month) && matchClass(e.class_type)), [entries, view, month, year, cls]);
+  const periodEntries = useMemo(
+    () => entries.filter((entry) => inPeriod(entry.month) && matchClass(entry.class_type)),
+    [entries, inPeriod, matchClass],
+  );
 
   const tuitionEntries = useMemo(() => periodEntries.filter((e) => e.kind === "thu" && e.income_type === "hoc_phi"), [periodEntries]);
   const otherEntries = useMemo(() => periodEntries.filter((e) => e.kind === "thu" && e.income_type !== "hoc_phi"), [periodEntries]);
@@ -73,10 +82,10 @@ export function FinanceTab() {
       const manual = entries.some((e) => e.income_type === "hoc_phi" && e.student_name === s.name && (e.course_label ?? "") === label);
       return !paidHere && !manual;
     });
-  }, [students, payments, entries, cls, view, month, year]);
+  }, [students, payments, entries, cls, inPeriod]);
 
   const sum = (rows: { amount: number }[]) => rows.reduce((a, b) => a + Number(b.amount), 0);
-  const tuitionIncome = sum(paidRows as any) + sum(tuitionEntries) + autoTuitionRows.reduce((a, s) => a + Number(s.tuition), 0);
+  const tuitionIncome = sum(paidRows) + sum(tuitionEntries) + autoTuitionRows.reduce((a, s) => a + Number(s.tuition), 0);
   const otherIncome = sum(otherEntries);
   const expense = sum(expenseEntries);
   const income = tuitionIncome + otherIncome;
@@ -105,7 +114,7 @@ export function FinanceTab() {
       if (thu || chi) rows.push({ m: key, thu, chi });
     }
     return rows;
-  }, [view, year, payments, entries, cls, stuMap, students]);
+  }, [view, year, payments, entries, cls, stuMap, students, matchClass]);
 
   const doExport = () => {
     const label = view === "month" ? fmtMonth(month + "-01") : `Năm ${year}`;
@@ -174,7 +183,7 @@ export function FinanceTab() {
                 <SelectItem value="year">Theo năm</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={cls} onValueChange={(v) => setCls(v as any)}>
+            <Select value={cls} onValueChange={(value) => setCls(value as "Tất cả" | ClassType)}>
               <SelectTrigger className="w-auto min-w-[130px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Tất cả">Tất cả lớp</SelectItem>
@@ -451,7 +460,7 @@ function EntryDialog({
         term_start: isTuition ? termStart : null,
         term_end: isTuition ? termEnd : null,
         paid_date: isTuition ? paidDate : null,
-      } as any });
+      } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-entries"] });
@@ -498,7 +507,7 @@ function EntryDialog({
             <>
               <div className="grid gap-1">
                 <Label>Hình thức</Label>
-                <Select value={mode} onValueChange={(v) => setMode(v as any)}>
+                <Select value={mode} onValueChange={(value) => setMode(value as "tiep_theo" | "moi")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="tiep_theo">Học phí khóa tiếp theo (học sinh đang học)</SelectItem>

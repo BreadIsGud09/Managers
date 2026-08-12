@@ -22,13 +22,23 @@ import {
   toLocalISO,
   weeklySessions,
   type ClassType,
+  type EditableStudentStatus,
   type ScheduleSlot,
   type Student,
 
 } from "@/lib/shared";
 import { upsertStudent } from "@/lib/students.functions";
 
-type FormState = Omit<Student, "id" | "schedule_days" | "sessions_per_day"> & { id?: string };
+type FormState = Omit<Student, "id" | "schedule_days" | "sessions_per_day" | "status"> & {
+  id?: string;
+  status: EditableStudentStatus;
+};
+
+function editableStatus(status: Student["status"] | undefined): EditableStudentStatus {
+  if (status === "Nghỉ phép") return "Bảo lưu";
+  if (status === "Kết thúc") return "Hoàn thành";
+  return status ?? "Đang học";
+}
 
 export function StudentDialog({ student, trigger }: { student?: Student; trigger: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +46,7 @@ export function StudentDialog({ student, trigger }: { student?: Student; trigger
   const upsert = useServerFn(upsertStudent);
 
   const mut = useMutation({
-    mutationFn: (v: FormState) => upsert({ data: v } as any),
+    mutationFn: (formState: FormState) => upsert({ data: formState }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students"] });
       toast.success(student ? "Đã cập nhật học sinh" : "Đã thêm học sinh");
@@ -55,7 +65,7 @@ export function StudentDialog({ student, trigger }: { student?: Student; trigger
       tuition: student?.tuition ?? defaultTuitionFor(cls),
       start_date: student?.start_date ?? toLocalISO(new Date()),
       end_date: student?.end_date ?? toLocalISO(new Date(Date.now() + 30 * 86400000)),
-      status: student?.status ?? "Đang học",
+      status: editableStatus(student?.status),
       reserve_days: student?.reserve_days ?? 0,
       total_sessions: student?.total_sessions ?? defaultSessionsFor(cls),
       schedule_slots: (student?.schedule_slots as ScheduleSlot[]) ?? [],

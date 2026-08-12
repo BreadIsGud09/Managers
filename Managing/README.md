@@ -22,6 +22,9 @@ Qua Telegram: Tích hợp tính năng cấu hình Telegram Bot Token và Chat ID
 
 This project was built with [Lovable](https://lovable.dev).
 
+For the codebase architecture, server-function conventions, database notes, and
+feature-maintenance pattern, see [PROJECT_GUIDE.md](./PROJECT_GUIDE.md).
+
 ## Build with Lovable
 
 Continue developing this project in the [Lovable editor](https://lovable.dev/projects/6d4d879c-9d6c-4860-8a38-60157332325a).

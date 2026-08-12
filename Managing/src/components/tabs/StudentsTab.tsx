@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Plus, Trash2, Users, Music, Sparkles, Palette, Columns3, PlusCircle, Download } from "lucide-react";
@@ -80,7 +80,7 @@ export function StudentsTab() {
   const toISO = to.toISOString().slice(0, 10);
   const { data: attendedRows = [] } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance-range", fromISO, toISO],
-    queryFn: () => fetchAttRange({ data: { from: fromISO, to: toISO } }) as any,
+    queryFn: () => fetchAttRange({ data: { from: fromISO, to: toISO } }),
   });
 
   // 1 giờ học = 1 buổi → quy đổi mỗi ngày điểm danh theo số giờ của các ca trong thứ đó
@@ -122,8 +122,14 @@ export function StudentsTab() {
   }, [attendedRows, studentById]);
 
 
-  const remainOf = (s: Student) => Math.max(0, (s.total_sessions ?? 0) - (attendedByStudent.get(s.id) ?? 0));
-  const statusOf = (s: Student) => effectiveStatus(s.status, remainOf(s));
+  const remainOf = useCallback(
+    (student: Student) => Math.max(0, (student.total_sessions ?? 0) - (attendedByStudent.get(student.id) ?? 0)),
+    [attendedByStudent],
+  );
+  const statusOf = useCallback(
+    (student: Student) => effectiveStatus(student.status, remainOf(student)),
+    [remainOf],
+  );
 
   // Tự động chuyển "Đang học" → "Hoàn thành" khi hết buổi;
   // "Chuẩn bị" → "Đang học" khi khóa trước của học sinh đó đã hoàn thành
@@ -135,7 +141,11 @@ export function StudentsTab() {
     const promote = list.filter((s) => {
       if (s.status !== "Chuẩn bị") return false;
       const prevActive = list.some(
-        (o) => o.id !== s.id && o.name === s.name && o.class_type === s.class_type && statusOf(o) === "Đang học",
+        (other) =>
+          other.id !== s.id &&
+          other.name === s.name &&
+          other.class_type === s.class_type &&
+          statusOf(other) === "Đang học",
       );
       return !prevActive;
     });
@@ -151,19 +161,22 @@ export function StudentsTab() {
             id: s.id, name: s.name, age: s.age, class_type: s.class_type, tuition: Number(s.tuition),
             start_date: s.start_date, end_date: s.end_date, status, reserve_days: s.reserve_days ?? 0,
             total_sessions: s.total_sessions, course_index: s.course_index ?? 1, schedule_slots: s.schedule_slots ?? [],
-          } as any
+          }
         }).catch(() => { });
       }
       qcAuto.invalidateQueries({ queryKey: ["students"] });
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, attendedByStudent]);
+  }, [students, remainOf, statusOf, saveStudent, qcAuto]);
 
   const filtered = useMemo(() => {
     let list = (students as Student[]).filter((s) => s.class_type === filter);
-    if (statusFilter !== "Tất cả") list = list.filter((s) => statusOf(s) === statusFilter);
+    if (statusFilter !== "Tất cả") {
+      list = list.filter(
+        (student) => statusOf(student) === statusFilter,
+      );
+    }
     return list;
-  }, [students, filter, statusFilter, attendedByStudent]);
+  }, [students, filter, statusFilter, statusOf]);
 
 
   const stats = useMemo(() => {
@@ -371,7 +384,7 @@ function NewCourseButton({ student }: { student: Student }) {
         total_sessions: student.total_sessions,
         course_index: (student.course_index ?? 1) + 1,
         schedule_slots: slots,
-      } as any
+      }
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students"] });

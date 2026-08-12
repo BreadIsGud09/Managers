@@ -13,38 +13,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { classChip, EmptyState } from "@/components/ui-bits";
-import { CLASSES, coursePrefix, fmtDate, toLocalISO, type ClassType, type Student } from "@/lib/shared";
+import {
+  CLASSES,
+  coursePrefix,
+  fmtDate,
+  toLocalISO,
+  type AttendanceRow,
+  type ClassType,
+  type LearningAttachment,
+  type LearningLog,
+  type Student,
+} from "@/lib/shared";
 import { listAttendance, listStudents } from "@/lib/students.functions";
 import { deleteLearningLog, listLearningLogs, upsertLearningLog } from "@/lib/learning.functions";
 import { exportXlsx } from "@/lib/export";
-
-export type Attachment = { kind: "image" | "video" | "link"; url: string; label?: string | null };
-export type LearningLog = {
-  id: string;
-  student_id: string | null;
-  class_type: ClassType;
-  date: string;
-  title: string;
-  content: string | null;
-  attachments: Attachment[];
-  is_class_wide: boolean;
-};
 
 export function LearningTab() {
   const fetchStudents = useServerFn(listStudents);
   const fetchLogs = useServerFn(listLearningLogs);
   const fetchAtt = useServerFn(listAttendance);
-  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchStudents() as any });
-  const { data: logs = [] } = useQuery<LearningLog[]>({ queryKey: ["learning-logs"], queryFn: () => fetchLogs() as any });
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["students"], queryFn: () => fetchStudents() });
+  const { data: logs = [] } = useQuery<LearningLog[]>({ queryKey: ["learning-logs"], queryFn: () => fetchLogs() });
 
   const [cls, setCls] = useState<ClassType>("Piano");
   const [studentId, setStudentId] = useState<string>("all");
   const [date, setDate] = useState<string>(toLocalISO(new Date()));
   const todayISO = date;
 
-  const { data: attRows = [] } = useQuery<any[]>({
+  const { data: attRows = [] } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance", date],
-    queryFn: () => fetchAtt({ data: { date } }) as any,
+    queryFn: () => fetchAtt({ data: { date } }),
   });
 
   const stuMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
@@ -232,9 +230,9 @@ function LogDialog({ students, cls, existing, trigger, defaultStudentId, default
   const [date, setDate] = useState(existing?.date ?? defaultDate ?? toLocalISO(new Date()));
   const [title, setTitle] = useState(existing?.title ?? "");
   const [content, setContent] = useState(existing?.content ?? "");
-  const [attachments, setAttachments] = useState<Attachment[]>(existing?.attachments ?? []);
+  const [attachments, setAttachments] = useState<LearningAttachment[]>(existing?.attachments ?? []);
   const [newUrl, setNewUrl] = useState("");
-  const [newKind, setNewKind] = useState<Attachment["kind"]>("image");
+  const [newKind, setNewKind] = useState<LearningAttachment["kind"]>("image");
 
   const mut = useMutation({
     mutationFn: () => save({ data: {
@@ -246,7 +244,7 @@ function LogDialog({ students, cls, existing, trigger, defaultStudentId, default
       content: content || null,
       attachments,
       is_class_wide: isClassWide,
-    } as any }),
+    } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["learning-logs"] });
       toast.success(existing ? "Đã cập nhật" : "Đã ghi nhật ký");
@@ -289,7 +287,7 @@ function LogDialog({ students, cls, existing, trigger, defaultStudentId, default
           <div className="grid gap-2">
             <Label>File đính kèm (link ảnh / video / tài liệu)</Label>
             <div className="flex gap-2">
-              <Select value={newKind} onValueChange={(v) => setNewKind(v as Attachment["kind"])}>
+              <Select value={newKind} onValueChange={(v) => setNewKind(v as LearningAttachment["kind"])}>
                 <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="image">Ảnh</SelectItem>
