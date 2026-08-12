@@ -142,6 +142,9 @@ request lifecycle and no domain object currently needs private mutable state.
   API and validation boundary.
 - [`shared-library.md`](./shared-library.md) explains why `src/Shared` exists and
   what may live there.
+- [`supabase-admin-client-lifecycle.md`](./supabase-admin-client-lifecycle.md)
+  distinguishes the reusable Supabase client from per-operation query builders
+  and returned DTOs.
 
 ## Database access and security
 
@@ -174,7 +177,9 @@ old-to-new row transfer was executed separately from these migration files.
 - Privileged server functions need server-side user and role authorization.
 - `saveEnrollmentStudent` uses several Data API requests instead of one
   transaction, so a partial failure can leave intermediate data.
-- A placeholder parent is created when the old UI supplies no parent details.
+- Parent information is required for new student identities. The student dialog
+  collects it before the course information, and the server validates it again
+  before starting any database writes.
 - The flat UI name `Student` really means `Enrollment`; renaming it would improve
   clarity but would touch most feature screens and should be done separately.
 - The first local migration file includes normalized base-table setup for clean

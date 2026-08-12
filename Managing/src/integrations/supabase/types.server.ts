@@ -1,4 +1,4 @@
-// Generated from Supabase project pdokgtshtidsezbmtyag on 2026-08-12.
+// Generated from Supabase project on 2026-08-12.
 // Keep this file aligned with the normalized Manager schema.
 
 export type Json =

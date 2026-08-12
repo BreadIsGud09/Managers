@@ -46,6 +46,37 @@ After a mutation, invalidate the relevant query root. For example, a student
 write invalidates `["students"]`; an operation affecting both a payment and a
 student invalidates both roots.
 
+## Student creation and parent information
+
+`StudentDialog.tsx` uses a parent-first, two-tab flow:
+
+1. **Thông tin phụ huynh** collects the required first name, last name, email,
+   and phone number.
+2. **Thông tin học sinh** collects the student and course details.
+
+The Vietnamese labels intentionally map to the normalized name columns as
+follows:
+
+| Form field        | Database column       |
+| ----------------- | --------------------- |
+| Parent `Họ`       | `parents.first_name`  |
+| Parent `Tên`      | `parents.last_name`   |
+| Student `Họ`      | `students.first_name` |
+| Student `Tên học` | `students.last_name`  |
+| `Tên gọi ở nhà`   | `students.aka`        |
+| `Ghi chú`         | `students.note`       |
+
+`Student.name` is derived by joining the two student name columns for existing
+screens; it is not stored as a separate database column. `aka` and `note` are
+optional identity fields and are preserved when another course is created for
+the same student.
+
+The **Tiếp tục** action validates the parent fields before moving forward. The
+**Lưu** action checks the parent and student fields again before calling the
+server. `StudentInputSchema` repeats the validation at the server boundary, so
+a client cannot bypass the required relationship. Editing a student preloads
+the linked parent record.
+
 ## Comments
 
 Comment lifecycle assumptions and business rules, such as why a student is

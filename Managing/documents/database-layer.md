@@ -9,13 +9,18 @@ It does **not** define browser-callable endpoints. Those live in
 
 ## Files
 
-| File                       | Responsibility                                                                                                                                |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `supabase-admin.server.ts` | Lazily creates one typed Supabase client from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The secret key is server-only and bypasses RLS. |
-| `manager-data.server.ts`   | Maps the existing course-oriented UI model to and from the normalized Manager tables.                                                         |
+| File                       | Responsibility                                                                                                                                                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supabase-admin.server.ts` | Lazily creates one typed Supabase client from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The secret key is server-only and bypasses RLS. Its object lifecycle is detailed in [`supabase-admin-client-lifecycle.md`](./supabase-admin-client-lifecycle.md). |
+| `manager-data.server.ts`   | Maps the existing course-oriented UI model to and from the normalized Manager tables.                                                                                                                                                                           |
 
 The `.server.ts` suffix is an ownership warning: browser components must not
 import these modules.
+
+The admin module manages a reusable Supabase **client**, not DTOs, query
+builders, a direct PostgreSQL connection, or a transaction. See
+[`supabase-admin-client-lifecycle.md`](./supabase-admin-client-lifecycle.md) for
+the distinction.
 
 ## Data model translated by `manager-data.server.ts`
 
@@ -39,44 +44,49 @@ This creates an important identifier rule:
 | `Student.id`        | `enrollments.enrollment_id` | The course enrollment being edited |
 | `Student.person_id` | `students.student_id`       | The reusable person identity       |
 
+Student identity details stay on `students`: `first_name`, `last_name`, `aka`,
+`age`, and `note`. The adapter exposes a combined `Student.name` for legacy UI
+screens while retaining the separate name columns for editing and persistence.
+
 Attendance, learning logs, and tuition payments also point to the enrollment,
 because they belong to a specific course rather than only to the person.
 
 ## What each function does
 
-| Function                      | Database behavior                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `statusFromDatabase`          | Converts core enrollment statuses plus `status_detail` into the Vietnamese UI status.                                |
-| `findClassByType`             | Finds the seeded class row matching Piano, Múa, or Vẽ.                                                               |
-| `findOrCreateClassLevel`      | Reuses or creates a `class_levels` record for the course number.                                                     |
-| `findOrCreateStudentIdentity` | Updates a supplied student identity, reuses a name/age match, or creates a student plus a placeholder parent.        |
-| `listEnrollmentStudents`      | Reads six normalized relations in parallel and joins them in memory into the flat `Student[]` DTO consumed by React. |
-| `saveEnrollmentStudent`       | Creates/updates identity, level, enrollment, weekly schedule rows, and enrollment-to-schedule links.                 |
-| `deleteEnrollmentStudent`     | Deletes tuition-payment income rows and the enrollment, while retaining the reusable student and parent identities.  |
+| Function                      | Database behavior                                                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `statusFromDatabase`          | Converts core enrollment statuses plus `status_detail` into the Vietnamese UI status.                                   |
+| `findClassByType`             | Finds the seeded class row matching Piano, Múa, or Vẽ.                                                                  |
+| `findOrCreateClassLevel`      | Reuses or creates a `class_levels` record for the course number.                                                        |
+| `saveParent`                  | Updates a supplied parent, reuses a parent with the same email, or creates a required parent record.                    |
+| `findOrCreateStudentIdentity` | Updates a supplied student identity or reuses/creates an identity under the resolved parent.                            |
+| `listEnrollmentStudents`      | Reads seven normalized relations in parallel and includes parent details in the flat `Student[]` DTO consumed by React. |
+| `saveEnrollmentStudent`       | Creates/updates parent, identity, level, enrollment, weekly schedule rows, and enrollment-to-schedule links.            |
+| `deleteEnrollmentStudent`     | Deletes tuition-payment income rows and the enrollment, while retaining the reusable student and parent identities.     |
 
 ### Read flow
 
-`listEnrollmentStudents` reads `enrollments`, `students`, `classes`,
+`listEnrollmentStudents` reads `enrollments`, `students`, `parents`, `classes`,
 `class_levels`, `enrollment_schedules`, and `class_schedules`. It builds `Map`
-objects keyed by their numeric IDs, then returns application DTOs. These maps
-are temporary lookup objects, not service classes and not database tables.
+objects keyed by their numeric IDs, then returns application DTOs containing the
+linked parent information. These maps are temporary lookup objects, not service
+classes and not database tables.
 
 ### Write flow
 
 `saveEnrollmentStudent` performs these operations:
 
-1. Resolve or create the normalized student identity.
-2. Resolve the selected class and course level.
-3. Insert or update the enrollment.
-4. Upsert reusable weekly class-schedule rows.
-5. Replace the enrollment's schedule-link rows.
+1. Validate required parent and student fields in the server function.
+2. Update, reuse by email, or create the parent record.
+3. Resolve or create the normalized student identity under that parent,
+   including separate name columns, `aka`, and `note`.
+4. Resolve the selected class and course level.
+5. Insert or update the enrollment.
+6. Upsert reusable weekly class-schedule rows.
+7. Replace the enrollment's schedule-link rows.
 
-Two current limitations must be understood:
-
-- When no parent details exist, a placeholder `parents` row is created because
-  `students.parent_id` is required by the normalized schema.
-- The sequence uses several Supabase Data API requests, not one database
-  transaction. Failure halfway through can leave an intermediate row.
+The sequence uses several Supabase Data API requests, not one database
+transaction. Failure halfway through can leave an intermediate row.
 
 ## Security boundary
 

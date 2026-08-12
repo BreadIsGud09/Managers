@@ -33,6 +33,11 @@ export function uiDayToDatabase(day: number): number {
 export function shortTime(value: string): string {
   return value.slice(0, 5);
 }
+/** Shared Vietnamese mobile rule used by parent forms and server validation. */
+export function IsValidPhoneNumber(value: string): boolean {
+  const phoneRegex = /^(?:\+?84|0)(?:3[2-9]|5[6|8|9]|7[0|6-9]|8[1-5]|9[0-4|6-9])[0-9]{7}$/;
+  return phoneRegex.test(value);
+}
 
 export function statusToDatabase(status: StudentStatus): string {
   switch (status) {

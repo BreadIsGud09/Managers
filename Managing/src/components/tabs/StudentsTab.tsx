@@ -1,15 +1,40 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2, Users, Music, Sparkles, Palette, Columns3, PlusCircle, Download } from "lucide-react";
+import {
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+  Music,
+  Sparkles,
+  Palette,
+  Columns3,
+  PlusCircle,
+  Download,
+} from "lucide-react";
 import { exportXlsx } from "@/Shared/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { classChip, EmptyState, statusBadge } from "@/components/ui-bits";
 import { StudentDialog } from "@/components/StudentDialog";
 import {
@@ -23,14 +48,17 @@ import {
   nextScheduledDate,
   computeEndDate,
   slotsPerDayMap,
-
-
   type ClassType,
   type Student,
   type StudentStatus,
   type AttendanceRow,
 } from "@/Shared/shared";
-import { deleteStudent, listAttendanceRange, listStudents, upsertStudent } from "@/server-functions/enrollment.functions";
+import {
+  deleteStudent,
+  listAttendanceRange,
+  listStudents,
+  upsertStudent,
+} from "@/server-functions/enrollment.functions";
 
 const ALL_COLS = [
   { key: "name", label: "Họ tên" },
@@ -48,7 +76,7 @@ const ALL_COLS = [
   { key: "actions", label: "Thao tác" },
 ] as const;
 
-type ColKey = typeof ALL_COLS[number]["key"];
+type ColKey = (typeof ALL_COLS)[number]["key"];
 const DEFAULT_COLS: ColKey[] = ALL_COLS.map((c) => c.key);
 
 const STATUS_OPTS: StudentStatus[] = ["Đang học", "Chuẩn bị", "Bảo lưu", "Hoàn thành"];
@@ -56,7 +84,10 @@ const STATUS_OPTS: StudentStatus[] = ["Đang học", "Chuẩn bị", "Bảo lưu
 export function StudentsTab() {
   const fetchList = useServerFn(listStudents);
   const fetchAttRange = useServerFn(listAttendanceRange);
-  const { data: students = [], isLoading } = useQuery({ queryKey: ["students"], queryFn: () => fetchList() });
+  const { data: students = [], isLoading } = useQuery({
+    queryKey: ["students"],
+    queryFn: () => fetchList(),
+  });
 
   const [filter, setFilter] = useState<ClassType>("Piano");
   const [statusFilter, setStatusFilter] = useState<"Tất cả" | StudentStatus>("Tất cả");
@@ -65,16 +96,23 @@ export function StudentsTab() {
     try {
       const raw = localStorage.getItem("students-cols");
       if (raw) return new Set(JSON.parse(raw) as ColKey[]);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return new Set(DEFAULT_COLS);
   });
 
   useEffect(() => {
-    try { localStorage.setItem("students-cols", JSON.stringify(Array.from(visible))); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("students-cols", JSON.stringify(Array.from(visible)));
+    } catch {
+      /* ignore */
+    }
   }, [visible]);
 
   const today = new Date();
-  const from = new Date(today); from.setFullYear(from.getFullYear() - 2);
+  const from = new Date(today);
+  from.setFullYear(from.getFullYear() - 2);
   const to = new Date(today);
   const fromISO = from.toISOString().slice(0, 10);
   const toISO = to.toISOString().slice(0, 10);
@@ -91,7 +129,10 @@ export function StudentsTab() {
     return n > 0 ? n : 1;
   };
 
-  const studentById = useMemo(() => new Map((students as Student[]).map((s) => [s.id, s])), [students]);
+  const studentById = useMemo(
+    () => new Map((students as Student[]).map((s) => [s.id, s])),
+    [students],
+  );
 
   // Chỉ tính các buổi nằm trong khóa hiện tại của học sinh (từ ngày bắt đầu → NKT thực tế)
   const inCourse = (s: Student | undefined, dateISO: string) => {
@@ -121,9 +162,9 @@ export function StudentsTab() {
     return m;
   }, [attendedRows, studentById]);
 
-
   const remainOf = useCallback(
-    (student: Student) => Math.max(0, (student.total_sessions ?? 0) - (attendedByStudent.get(student.id) ?? 0)),
+    (student: Student) =>
+      Math.max(0, (student.total_sessions ?? 0) - (attendedByStudent.get(student.id) ?? 0)),
     [attendedByStudent],
   );
   const statusOf = useCallback(
@@ -137,7 +178,9 @@ export function StudentsTab() {
   const saveStudent = useServerFn(upsertStudent);
   useEffect(() => {
     const list = students as Student[];
-    const done = list.filter((s) => s.status === "Đang học" && (s.total_sessions ?? 0) > 0 && remainOf(s) === 0);
+    const done = list.filter(
+      (s) => s.status === "Đang học" && (s.total_sessions ?? 0) > 0 && remainOf(s) === 0,
+    );
     const promote = list.filter((s) => {
       if (s.status !== "Chuẩn bị") return false;
       const prevActive = list.some(
@@ -158,11 +201,26 @@ export function StudentsTab() {
       for (const { s, status } of changes) {
         await saveStudent({
           data: {
-            id: s.id, name: s.name, age: s.age, class_type: s.class_type, tuition: Number(s.tuition),
-            start_date: s.start_date, end_date: s.end_date, status, reserve_days: s.reserve_days ?? 0,
-            total_sessions: s.total_sessions, course_index: s.course_index ?? 1, schedule_slots: s.schedule_slots ?? [],
-          }
-        }).catch(() => { });
+            id: s.id,
+            first_name: s.first_name,
+            last_name: s.last_name,
+            name: s.name,
+            aka: s.aka,
+            note: s.note,
+            age: s.age,
+            class_type: s.class_type,
+            tuition: Number(s.tuition),
+            start_date: s.start_date,
+            end_date: s.end_date,
+            status,
+            reserve_days: s.reserve_days ?? 0,
+            total_sessions: s.total_sessions,
+            course_index: s.course_index ?? 1,
+            schedule_slots: s.schedule_slots ?? [],
+            person_id: s.person_id ?? null,
+            parent: s.parent,
+          },
+        }).catch(() => {});
       }
       qcAuto.invalidateQueries({ queryKey: ["students"] });
     })();
@@ -171,13 +229,10 @@ export function StudentsTab() {
   const filtered = useMemo(() => {
     let list = (students as Student[]).filter((s) => s.class_type === filter);
     if (statusFilter !== "Tất cả") {
-      list = list.filter(
-        (student) => statusOf(student) === statusFilter,
-      );
+      list = list.filter((student) => statusOf(student) === statusFilter);
     }
     return list;
   }, [students, filter, statusFilter, statusOf]);
-
 
   const stats = useMemo(() => {
     const list = students as Student[];
@@ -195,8 +250,18 @@ export function StudentsTab() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Tổng học sinh" value={stats.total} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Piano" value={stats.piano} icon={<Music className="h-4 w-4" />} tint="piano" />
-        <StatCard label="Múa" value={stats.mua} icon={<Sparkles className="h-4 w-4" />} tint="mua" />
+        <StatCard
+          label="Piano"
+          value={stats.piano}
+          icon={<Music className="h-4 w-4" />}
+          tint="piano"
+        />
+        <StatCard
+          label="Múa"
+          value={stats.mua}
+          icon={<Sparkles className="h-4 w-4" />}
+          tint="mua"
+        />
         <StatCard label="Vẽ" value={stats.ve} icon={<Palette className="h-4 w-4" />} tint="ve" />
       </div>
 
@@ -209,20 +274,30 @@ export function StudentsTab() {
           <div className="flex flex-wrap items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm"><Columns3 className="mr-1 h-4 w-4" />Cột</Button>
+                <Button variant="outline" size="sm">
+                  <Columns3 className="mr-1 h-4 w-4" />
+                  Cột
+                </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-56">
                 <p className="mb-2 text-xs font-semibold text-muted-foreground">Hiện/ẩn cột</p>
                 <div className="space-y-1.5">
                   {ALL_COLS.map((c) => (
-                    <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted">
-                      <Checkbox checked={visible.has(c.key)} onCheckedChange={(v) => {
-                        setVisible((prev) => {
-                          const n = new Set(prev);
-                          if (v) n.add(c.key); else n.delete(c.key);
-                          return n;
-                        });
-                      }} />
+                    <label
+                      key={c.key}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
+                    >
+                      <Checkbox
+                        checked={visible.has(c.key)}
+                        onCheckedChange={(v) => {
+                          setVisible((prev) => {
+                            const n = new Set(prev);
+                            if (v) n.add(c.key);
+                            else n.delete(c.key);
+                            return n;
+                          });
+                        }}
+                      />
                       <span>{c.label}</span>
                     </label>
                   ))}
@@ -230,43 +305,100 @@ export function StudentsTab() {
               </PopoverContent>
             </Popover>
             <Select value={filter} onValueChange={(v) => setFilter(v as ClassType)}>
-              <SelectTrigger className="w-auto min-w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-auto min-w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {CLASSES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-              <SelectTrigger className="w-auto min-w-[175px]"><SelectValue /></SelectTrigger>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+            >
+              <SelectTrigger className="w-auto min-w-[175px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Tất cả">Tất cả trạng thái</SelectItem>
-                {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {STATUS_OPTS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={() => {
-              if (filtered.length === 0) return toast.info("Không có dữ liệu để xuất");
-              exportXlsx("danh-sach-hoc-sinh", [{
-                name: "Học sinh",
-                rows: [
-                  ["Họ tên", "Tên khóa", "Tuổi", "Lớp", "Học phí", "Lịch học", "Tổng buổi", "Bảo lưu", "Bắt đầu", "Kết thúc", "NKT thực tế", "Trạng thái"],
-                  ...(filtered as Student[]).map((s) => {
-                    const reserved = reservedByStudent.get(s.id) ?? 0;
-                    return [
-                      s.name, `${coursePrefix(s.class_type)}${s.course_index ?? 1}`, s.age, s.class_type, Number(s.tuition),
-                      (s.schedule_slots ?? []).map((sl) => `${DAYS_SHORT[sl.day]} ${sl.start}-${sl.end}`).join(", "),
-                      s.total_sessions ?? 0, reserved, fmtDate(s.start_date), fmtDate(s.end_date),
-                      fmtDate(addScheduledDays(s.end_date, s.schedule_slots ?? [], reserved)), statusOf(s),
-                    ];
-                  }),
-                ],
-              }]);
-              toast.success("Đã xuất danh sách học sinh");
-            }}><Download className="mr-1 h-4 w-4" />Xuất dữ liệu</Button>
-            <StudentDialog trigger={<Button><Plus className="mr-1 h-4 w-4" />Học sinh mới</Button>} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (filtered.length === 0) return toast.info("Không có dữ liệu để xuất");
+                exportXlsx("danh-sach-hoc-sinh", [
+                  {
+                    name: "Học sinh",
+                    rows: [
+                      [
+                        "Họ tên",
+                        "Tên khóa",
+                        "Tuổi",
+                        "Lớp",
+                        "Học phí",
+                        "Lịch học",
+                        "Tổng buổi",
+                        "Bảo lưu",
+                        "Bắt đầu",
+                        "Kết thúc",
+                        "NKT thực tế",
+                        "Trạng thái",
+                      ],
+                      ...(filtered as Student[]).map((s) => {
+                        const reserved = reservedByStudent.get(s.id) ?? 0;
+                        return [
+                          s.name,
+                          `${coursePrefix(s.class_type)}${s.course_index ?? 1}`,
+                          s.age,
+                          s.class_type,
+                          Number(s.tuition),
+                          (s.schedule_slots ?? [])
+                            .map((sl) => `${DAYS_SHORT[sl.day]} ${sl.start}-${sl.end}`)
+                            .join(", "),
+                          s.total_sessions ?? 0,
+                          reserved,
+                          fmtDate(s.start_date),
+                          fmtDate(s.end_date),
+                          fmtDate(addScheduledDays(s.end_date, s.schedule_slots ?? [], reserved)),
+                          statusOf(s),
+                        ];
+                      }),
+                    ],
+                  },
+                ]);
+                toast.success("Đã xuất danh sách học sinh");
+              }}
+            >
+              <Download className="mr-1 h-4 w-4" />
+              Xuất dữ liệu
+            </Button>
+            <StudentDialog
+              trigger={
+                <Button>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Học sinh mới
+                </Button>
+              }
+            />
           </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Đang tải...</div>
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Đang tải...
+            </div>
           ) : filtered.length === 0 ? (
             <EmptyState text="Chưa có học sinh nào. Bấm 'Học sinh mới' để bắt đầu." />
           ) : (
@@ -295,14 +427,27 @@ export function StudentsTab() {
                     const attended = attendedByStudent.get(s.id) ?? 0;
                     const reserved = reservedByStudent.get(s.id) ?? 0;
                     const remain = Math.max(0, (s.total_sessions ?? 0) - attended);
-                    const actualEnd = addScheduledDays(s.end_date, s.schedule_slots ?? [], reserved);
+                    const actualEnd = addScheduledDays(
+                      s.end_date,
+                      s.schedule_slots ?? [],
+                      reserved,
+                    );
                     return (
                       <TableRow key={s.id}>
                         {show("name") && <TableCell className="font-medium">{s.name}</TableCell>}
-                        {show("course") && <TableCell className="text-center"><span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{coursePrefix(s.class_type)}{s.course_index ?? 1}</span></TableCell>}
+                        {show("course") && (
+                          <TableCell className="text-center">
+                            <span className="inline-flex min-w-[2.5rem] items-center justify-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                              {coursePrefix(s.class_type)}
+                              {s.course_index ?? 1}
+                            </span>
+                          </TableCell>
+                        )}
                         {show("age") && <TableCell>{s.age}</TableCell>}
                         {show("class") && <TableCell>{classChip(s.class_type)}</TableCell>}
-                        {show("tuition") && <TableCell>{formatMoney(Number(s.tuition))}đ</TableCell>}
+                        {show("tuition") && (
+                          <TableCell>{formatMoney(Number(s.tuition))}đ</TableCell>
+                        )}
                         {show("schedule") && (
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -313,7 +458,10 @@ export function StudentsTab() {
                                   .slice()
                                   .sort((a, b) => a.day - b.day || a.start.localeCompare(b.start))
                                   .map((sl, i) => (
-                                    <span key={i} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                                    <span
+                                      key={i}
+                                      className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium"
+                                    >
                                       {DAYS_SHORT[sl.day]} ({sl.start}–{sl.end})
                                     </span>
                                   ))
@@ -322,14 +470,30 @@ export function StudentsTab() {
                           </TableCell>
                         )}
 
-                        {show("total") && <TableCell className="text-center">{s.total_sessions ?? "—"}</TableCell>}
+                        {show("total") && (
+                          <TableCell className="text-center">{s.total_sessions ?? "—"}</TableCell>
+                        )}
                         {show("remain") && (
                           <TableCell className="text-center">
-                            <span className={`font-semibold ${remain <= 5 ? "text-[color:var(--warning)]" : ""}`}>{remain}</span>
-                            <span className="ml-1 text-xs text-muted-foreground">/{s.total_sessions}</span>
+                            <span
+                              className={`font-semibold ${remain <= 5 ? "text-[color:var(--warning)]" : ""}`}
+                            >
+                              {remain}
+                            </span>
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              /{s.total_sessions}
+                            </span>
                           </TableCell>
                         )}
-                        {show("reserve") && <TableCell className="text-center">{reserved > 0 ? <span className="font-semibold text-primary">{reserved}</span> : <span className="text-muted-foreground">—</span>}</TableCell>}
+                        {show("reserve") && (
+                          <TableCell className="text-center">
+                            {reserved > 0 ? (
+                              <span className="font-semibold text-primary">{reserved}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
                         {show("term") && (
                           <TableCell className="text-sm text-muted-foreground">
                             {fmtDate(s.start_date)} → {fmtDate(s.end_date)}
@@ -337,14 +501,31 @@ export function StudentsTab() {
                         )}
                         {show("actualEnd") && (
                           <TableCell className="text-sm">
-                            <span className={reserved > 0 ? "font-semibold text-primary" : "text-muted-foreground"}>{fmtDate(actualEnd)}</span>
+                            <span
+                              className={
+                                reserved > 0
+                                  ? "font-semibold text-primary"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              {fmtDate(actualEnd)}
+                            </span>
                           </TableCell>
                         )}
-                        {show("status") && <TableCell>{statusBadge(effectiveStatus(s.status, remain))}</TableCell>}
+                        {show("status") && (
+                          <TableCell>{statusBadge(effectiveStatus(s.status, remain))}</TableCell>
+                        )}
                         {show("actions") && (
                           <TableCell className="text-right">
                             <div className="inline-flex gap-1">
-                              <StudentDialog student={s} trigger={<Button size="icon" variant="ghost"><Pencil className="h-4 w-4" /></Button>} />
+                              <StudentDialog
+                                student={s}
+                                trigger={
+                                  <Button size="icon" variant="ghost">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
                               <NewCourseButton student={s} />
                               <DeleteStudentButton id={s.id} name={s.name} />
                             </div>
@@ -371,31 +552,47 @@ function NewCourseButton({ student }: { student: Student }) {
   const nextStart = nextScheduledDate(actualEnd, slots);
   const nextEnd = computeEndDate(nextStart, slots, student.total_sessions ?? 24) ?? nextStart;
   const mut = useMutation({
-    mutationFn: () => save({
-      data: {
-        name: student.name,
-        age: student.age,
-        class_type: student.class_type,
-        tuition: Number(student.tuition),
-        start_date: nextStart,
-        end_date: nextEnd,
-        status: "Đang học",
-        reserve_days: 0,
-        total_sessions: student.total_sessions,
-        course_index: (student.course_index ?? 1) + 1,
-        schedule_slots: slots,
-      }
-    }),
+    mutationFn: () =>
+      save({
+        data: {
+          name: student.name,
+          first_name: student.first_name,
+          last_name: student.last_name,
+          aka: student.aka,
+          note: student.note,
+          age: student.age,
+          class_type: student.class_type,
+          tuition: Number(student.tuition),
+          start_date: nextStart,
+          end_date: nextEnd,
+          status: "Đang học",
+          reserve_days: 0,
+          total_sessions: student.total_sessions,
+          course_index: (student.course_index ?? 1) + 1,
+          schedule_slots: slots,
+          person_id: student.person_id ?? null,
+          parent: student.parent,
+        },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students"] });
-      toast.success(`Đã tạo khóa mới ${coursePrefix(student.class_type)}${(student.course_index ?? 1) + 1} cho ${student.name}: ${fmtDate(nextStart)} → ${fmtDate(nextEnd)}`);
+      toast.success(
+        `Đã tạo khóa mới ${coursePrefix(student.class_type)}${(student.course_index ?? 1) + 1} cho ${student.name}: ${fmtDate(nextStart)} → ${fmtDate(nextEnd)}`,
+      );
     },
 
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <Button size="icon" variant="ghost" className="text-primary hover:bg-primary/10" title="Thêm khóa mới"
-      onClick={() => { if (confirm(`Tạo khóa học mới cho "${student.name}"? Khóa cũ vẫn được lưu.`)) mut.mutate(); }}>
+    <Button
+      size="icon"
+      variant="ghost"
+      className="text-primary hover:bg-primary/10"
+      title="Thêm khóa mới"
+      onClick={() => {
+        if (confirm(`Tạo khóa học mới cho "${student.name}"? Khóa cũ vẫn được lưu.`)) mut.mutate();
+      }}
+    >
       <PlusCircle className="h-4 w-4" />
     </Button>
   );
@@ -406,19 +603,45 @@ function DeleteStudentButton({ id, name }: { id: string; name: string }) {
   const del = useServerFn(deleteStudent);
   const mut = useMutation({
     mutationFn: () => del({ data: { id } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["students"] }); toast.success("Đã xóa học sinh"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["students"] });
+      toast.success("Đã xóa học sinh");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-      onClick={() => { if (confirm(`Xóa học sinh "${name}"?`)) mut.mutate(); }}>
+    <Button
+      size="icon"
+      variant="ghost"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+      onClick={() => {
+        if (confirm(`Xóa học sinh "${name}"?`)) mut.mutate();
+      }}
+    >
       <Trash2 className="h-4 w-4" />
     </Button>
   );
 }
 
-function StatCard({ label, value, icon, tint }: { label: string; value: number; icon: React.ReactNode; tint?: "piano" | "mua" | "ve" }) {
-  const tintCls = tint === "piano" ? "bg-piano/10 text-piano" : tint === "mua" ? "bg-mua/10 text-mua" : tint === "ve" ? "bg-ve/20 text-[color:var(--ve-foreground)]" : "bg-primary/10 text-primary";
+function StatCard({
+  label,
+  value,
+  icon,
+  tint,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tint?: "piano" | "mua" | "ve";
+}) {
+  const tintCls =
+    tint === "piano"
+      ? "bg-piano/10 text-piano"
+      : tint === "mua"
+        ? "bg-mua/10 text-mua"
+        : tint === "ve"
+          ? "bg-ve/20 text-[color:var(--ve-foreground)]"
+          : "bg-primary/10 text-primary";
   return (
     <Card className="shadow-card">
       <CardContent className="flex items-center justify-between p-4">

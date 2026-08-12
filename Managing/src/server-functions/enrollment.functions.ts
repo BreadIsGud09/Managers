@@ -6,6 +6,7 @@ import type { AttendanceRow, ScheduleChange } from "@/Shared/shared";
 import { computeEndDate, slotsPerDayMap } from "@/Shared/shared";
 import {
   ClassTypeSchema,
+  IsValidPhoneNumber,
   NumericIdSchema,
   databaseDayToUi,
   joinName,
@@ -35,10 +36,27 @@ const ScheduleSlotSchema = z
     message: "Giờ bắt đầu phải trước giờ kết thúc",
   });
 
+// Defense in depth for non-UI callers; dialogs normally reject these errors first.
+const ParentInputSchema = z.object({
+  id: NumericIdSchema.nullable().optional(),
+  first_name: z.string().trim().min(1, "Vui lòng nhập họ phụ huynh").max(80),
+  last_name: z.string().trim().min(1, "Vui lòng nhập tên phụ huynh").max(80),
+  email: z.string().trim().email("Email phụ huynh không hợp lệ").max(254),
+  phone_number: z
+    .string()
+    .trim()
+    .max(30)
+    .refine(IsValidPhoneNumber, "Số điện thoại phụ huynh không hợp lệ"),
+});
+
 const StudentInputSchema = z
   .object({
     id: NumericIdSchema.optional(),
+    first_name: z.string().trim().min(1).max(80),
+    last_name: z.string().trim().min(1).max(80),
     name: z.string().trim().min(1).max(120),
+    aka: z.string().trim().max(80).nullable().optional(),
+    note: z.string().trim().max(500).nullable().optional(),
     age: z.number().int().min(1).max(120),
     class_type: ClassTypeSchema,
     tuition: z.number().min(0),
@@ -50,24 +68,34 @@ const StudentInputSchema = z
     course_index: z.number().int().min(1).default(1),
     schedule_slots: z.array(ScheduleSlotSchema).min(1),
     person_id: NumericIdSchema.nullable().optional(),
+    parent: ParentInputSchema,
   })
   .refine(
     (input) => {
       const total = input.schedule_slots.reduce((sum, slot) => {
         const [startHour, startMinute] = slot.start.split(":").map(Number);
         const [endHour, endMinute] = slot.end.split(":").map(Number);
-        return sum + Math.max(1, Math.round(((endHour * 60 + endMinute) - (startHour * 60 + startMinute)) / 60));
+        return (
+          sum +
+          Math.max(1, Math.round((endHour * 60 + endMinute - (startHour * 60 + startMinute)) / 60))
+        );
       }, 0);
       return total >= 2;
     },
     { message: "Học sinh phải học tối thiểu 2 buổi/tuần", path: ["schedule_slots"] },
   )
   .refine(
-    (input) => input.schedule_slots.some((slot) => slot.day === new Date(`${input.start_date}T00:00:00`).getDay()),
+    (input) =>
+      input.schedule_slots.some(
+        (slot) => slot.day === new Date(`${input.start_date}T00:00:00`).getDay(),
+      ),
     { message: "Ngày bắt đầu không trùng lịch học", path: ["start_date"] },
   )
   .refine(
-    (input) => input.schedule_slots.some((slot) => slot.day === new Date(`${input.end_date}T00:00:00`).getDay()),
+    (input) =>
+      input.schedule_slots.some(
+        (slot) => slot.day === new Date(`${input.end_date}T00:00:00`).getDay(),
+      ),
     { message: "Ngày kết thúc không trùng lịch học", path: ["end_date"] },
   );
 
@@ -198,7 +226,9 @@ export const setAttendance = createServerFn({ method: "POST" })
   });
 
 export const deleteAttendance = createServerFn({ method: "POST" })
-  .validator((value: unknown) => z.object({ student_id: NumericIdSchema, date: z.string() }).parse(value))
+  .validator((value: unknown) =>
+    z.object({ student_id: NumericIdSchema, date: z.string() }).parse(value),
+  )
   .handler(async ({ data }) => {
     const db = await adminDatabase();
     const { error } = await db
@@ -212,7 +242,9 @@ export const deleteAttendance = createServerFn({ method: "POST" })
 
 export const listPeople = createServerFn({ method: "GET" }).handler(async () => {
   const db = await adminDatabase();
-  const { data, error } = await db.from("students").select("student_id,first_name,last_name,age,note");
+  const { data, error } = await db
+    .from("students")
+    .select("student_id,first_name,last_name,age,note");
   if (error) throw new Error(error.message);
   return (data ?? [])
     .map((row) => ({
@@ -231,17 +263,15 @@ export const listScheduleChanges = createServerFn({ method: "GET" }).handler(asy
     .select("*")
     .order("effective_from", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(
-    (row): ScheduleChange => ({
-      id: String(row.change_id),
-      student_id: String(row.enrollment_id),
-      effective_from: row.effective_from,
-      old_slots: z.array(ScheduleSlotSchema).parse(row.old_slots),
-      new_slots: z.array(ScheduleSlotSchema).parse(row.new_slots),
-      reason: row.reason,
-      created_at: row.created_at,
-    }),
-  );
+  return (data ?? []).map((row): ScheduleChange => ({
+    id: String(row.change_id),
+    student_id: String(row.enrollment_id),
+    effective_from: row.effective_from,
+    old_slots: z.array(ScheduleSlotSchema).parse(row.old_slots),
+    new_slots: z.array(ScheduleSlotSchema).parse(row.new_slots),
+    reason: row.reason,
+    created_at: row.created_at,
+  }));
 });
 
 export const changeSchedule = createServerFn({ method: "POST" })
@@ -257,7 +287,9 @@ export const changeSchedule = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await adminDatabase();
-    const student = (await (await managerData()).listEnrollmentStudents()).find((row) => row.id === data.student_id);
+    const student = (await (await managerData()).listEnrollmentStudents()).find(
+      (row) => row.id === data.student_id,
+    );
     if (!student) throw new Error("Không tìm thấy khóa học");
 
     const { data: attendance, error: attendanceError } = await db
@@ -276,9 +308,12 @@ export const changeSchedule = createServerFn({ method: "POST" })
       usedSessions += sessionsByDay.get(day) ?? 1;
     }
     const remainingSessions = Math.max(1, student.total_sessions - usedSessions);
-    const endDate = computeEndDate(data.effective_from, data.new_slots, remainingSessions) ?? student.end_date;
+    const endDate =
+      computeEndDate(data.effective_from, data.new_slots, remainingSessions) ?? student.end_date;
 
-    await (await managerData()).saveEnrollmentStudent({
+    await (
+      await managerData()
+    ).saveEnrollmentStudent({
       ...student,
       end_date: endDate,
       schedule_slots: data.new_slots,
@@ -287,8 +322,16 @@ export const changeSchedule = createServerFn({ method: "POST" })
     const { error: changeError } = await db.from("enrollment_schedule_changes").insert({
       enrollment_id: numericId(data.student_id),
       effective_from: data.effective_from,
-      old_slots: student.schedule_slots.map((slot) => ({ day: slot.day, start: slot.start, end: slot.end })),
-      new_slots: data.new_slots.map((slot) => ({ day: slot.day, start: slot.start, end: slot.end })),
+      old_slots: student.schedule_slots.map((slot) => ({
+        day: slot.day,
+        start: slot.start,
+        end: slot.end,
+      })),
+      new_slots: data.new_slots.map((slot) => ({
+        day: slot.day,
+        start: slot.start,
+        end: slot.end,
+      })),
       reason: data.reason ?? null,
     });
     if (changeError) throw new Error(changeError.message);

@@ -1,6 +1,7 @@
 export type ClassType = "Piano" | "Múa" | "Vẽ";
 // The last two values are retained for rows created before the current status workflow.
-export type StudentStatus = "Đang học" | "Bảo lưu" | "Hoàn thành" | "Chuẩn bị" | "Nghỉ phép" | "Kết thúc";
+export type StudentStatus =
+  "Đang học" | "Bảo lưu" | "Hoàn thành" | "Chuẩn bị" | "Nghỉ phép" | "Kết thúc";
 export type EditableStudentStatus = Exclude<StudentStatus, "Nghỉ phép" | "Kết thúc">;
 export type AttendanceStatus = "Đi học" | "Nghỉ có phép" | "Nghỉ không phép" | "Bảo lưu";
 
@@ -29,9 +30,12 @@ export function coursePrefix(c: ClassType): "P" | "M" | "V" {
   return c === "Piano" ? "P" : c === "Múa" ? "M" : "V";
 }
 
-
 /** Cộng thêm N buổi (theo lịch học) vào ngày end_date để lấy ngày kết thúc thực tế */
-export function addScheduledDays(endISO: string, slots: ScheduleSlot[], extraSessions: number): string {
+export function addScheduledDays(
+  endISO: string,
+  slots: ScheduleSlot[],
+  extraSessions: number,
+): string {
   if (!endISO || extraSessions <= 0 || slots.length === 0) return endISO;
   const perDay = slotsPerDayMap(slots);
   const cursor = new Date(endISO + "T00:00:00");
@@ -51,6 +55,14 @@ export interface ScheduleSlot {
   end: string; // "HH:MM"
 }
 
+export interface ParentInformation {
+  id?: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+}
+
 /**
  * UI compatibility DTO for one course enrollment.
  *
@@ -61,7 +73,12 @@ export interface ScheduleSlot {
  */
 export interface Student {
   id: string;
+  /** Normalized identity columns; `name` remains their combined display value. */
+  first_name: string;
+  last_name: string;
   name: string;
+  aka: string | null;
+  note: string | null;
   age: number;
   class_type: ClassType;
   tuition: number;
@@ -75,6 +92,7 @@ export interface Student {
   schedule_slots: ScheduleSlot[];
   course_index: number;
   person_id?: string | null;
+  parent: ParentInformation;
 }
 
 /** Attendance for one enrollment; `student_id` carries an `enrollment_id`. */
@@ -135,7 +153,9 @@ export function defaultTuitionFor(c: ClassType) {
 
 export function formatMoney(n: number) {
   if (!Number.isFinite(n)) return "";
-  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return Math.round(n)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
 export function parseMoney(s: string): number {
@@ -165,7 +185,7 @@ export function dayOfWeekOf(iso: string): number | null {
 export function slotSessions(sl: ScheduleSlot): number {
   const [sh, sm] = sl.start.split(":").map(Number);
   const [eh, em] = sl.end.split(":").map(Number);
-  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  const mins = eh * 60 + em - (sh * 60 + sm);
   return Math.max(1, Math.round(mins / 60));
 }
 
@@ -193,7 +213,11 @@ export function weeklySessions(slots: ScheduleSlot[]): number {
 }
 
 /** Tính ngày kết thúc dựa trên schedule_slots + total_sessions */
-export function computeEndDate(startISO: string, slots: ScheduleSlot[], total: number): string | null {
+export function computeEndDate(
+  startISO: string,
+  slots: ScheduleSlot[],
+  total: number,
+): string | null {
   if (!startISO || slots.length === 0 || total < 1) return null;
   const perDay = slotsPerDayMap(slots);
   const start = new Date(startISO + "T00:00:00");
@@ -240,8 +264,8 @@ export function fmtMonth(monthISO: string) {
 export function classChipStyles(c: ClassType) {
   return {
     Piano: "bg-piano text-piano-foreground",
-    "Múa": "bg-mua text-mua-foreground",
-    "Vẽ": "bg-ve text-ve-foreground",
+    Múa: "bg-mua text-mua-foreground",
+    Vẽ: "bg-ve text-ve-foreground",
   }[c];
 }
 
@@ -279,7 +303,8 @@ export function groupByPerson(students: Student[]): PersonGroup[] {
     m.get(k)!.courses.push(s);
   }
   const out = Array.from(m.values());
-  for (const g of out) g.courses.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
+  for (const g of out)
+    g.courses.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""));
   return out.sort((a, b) => a.name.localeCompare(b.name, "vi"));
 }
 
