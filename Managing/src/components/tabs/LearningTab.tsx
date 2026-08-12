@@ -23,10 +23,10 @@ import {
   type LearningAttachment,
   type LearningLog,
   type Student,
-} from "@/lib/shared";
-import { listAttendance, listStudents } from "@/lib/students.functions";
-import { deleteLearningLog, listLearningLogs, upsertLearningLog } from "@/lib/learning.functions";
-import { exportXlsx } from "@/lib/export";
+} from "@/Shared/shared";
+import { listAttendance, listStudents } from "@/server-functions/enrollment.functions";
+import { deleteLearningLog, listLearningLogs, upsertLearningLog } from "@/server-functions/learning.functions";
+import { exportXlsx } from "@/Shared/export";
 
 export function LearningTab() {
   const fetchStudents = useServerFn(listStudents);

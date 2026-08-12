@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { classChip, EmptyState } from "@/components/ui-bits";
-import { DAYS, fmtDate, toLocalISO, type AttendanceRow, type ScheduleSlot, type Student } from "@/lib/shared";
-import { listAttendance, listStudents } from "@/lib/students.functions";
-import { sendAttendanceReportTelegram, sendCustomTelegram, sendExpiringTelegram, sendTodayScheduleTelegram } from "@/lib/telegram.functions";
+import { DAYS, fmtDate, toLocalISO, type AttendanceRow, type ScheduleSlot, type Student } from "@/Shared/shared";
+import { listAttendance, listStudents } from "@/server-functions/enrollment.functions";
+import { sendAttendanceReportTelegram, sendCustomTelegram, sendExpiringTelegram, sendTodayScheduleTelegram } from "@/server-functions/notification.functions";
 
 export function NotificationsTab() {
   const fetchList = useServerFn(listStudents);

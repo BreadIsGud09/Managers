@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Plus, Trash2, Users, Music, Sparkles, Palette, Columns3, PlusCircle, Download } from "lucide-react";
-import { exportXlsx } from "@/lib/export";
+import { exportXlsx } from "@/Shared/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,8 +29,8 @@ import {
   type Student,
   type StudentStatus,
   type AttendanceRow,
-} from "@/lib/shared";
-import { deleteStudent, listAttendanceRange, listStudents, upsertStudent } from "@/lib/students.functions";
+} from "@/Shared/shared";
+import { deleteStudent, listAttendanceRange, listStudents, upsertStudent } from "@/server-functions/enrollment.functions";
 
 const ALL_COLS = [
   { key: "name", label: "Họ tên" },

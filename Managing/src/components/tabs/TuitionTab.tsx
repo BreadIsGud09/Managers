@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, Search, Wallet, Download } from "lucide-react";
-import { exportXlsx } from "@/lib/export";
+import { exportXlsx } from "@/Shared/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,9 +35,9 @@ import {
   type Student,
   type TuitionPayment,
   groupByPerson,
-} from "@/lib/shared";
-import { listStudents, upsertStudent } from "@/lib/students.functions";
-import { deletePayment, listPayments, upsertPayment } from "@/lib/tuition.functions";
+} from "@/Shared/shared";
+import { listStudents, upsertStudent } from "@/server-functions/enrollment.functions";
+import { deletePayment, listPayments, upsertPayment } from "@/server-functions/tuition.functions";
 
 export function TuitionTab() {
   const fetchList = useServerFn(listStudents);

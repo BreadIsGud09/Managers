@@ -14,11 +14,11 @@ import { EmptyState } from "@/components/ui-bits";
 import {
   CLASSES, addScheduledDays, computeEndDate, coursePrefix, fmtDate, fmtMonth, formatMoney, parseMoney,
   type ClassType, type Student, type TuitionPayment,
-} from "@/lib/shared";
-import { listPayments } from "@/lib/tuition.functions";
-import { listStudents } from "@/lib/students.functions";
-import { deleteFinanceEntry, listExpenseCategories, listFinanceEntries, upsertFinanceEntry } from "@/lib/finance.functions";
-import { exportXlsx } from "@/lib/export";
+} from "@/Shared/shared";
+import { listPayments } from "@/server-functions/tuition.functions";
+import { listStudents } from "@/server-functions/enrollment.functions";
+import { deleteFinanceEntry, listExpenseCategories, listFinanceEntries, upsertFinanceEntry } from "@/server-functions/finance.functions";
+import { exportXlsx } from "@/Shared/export";
 
 type Entry = {
   id: string; month: string; kind: "thu" | "chi"; category: string; amount: number; note: string | null; is_fixed: boolean;

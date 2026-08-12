@@ -51,6 +51,14 @@ export interface ScheduleSlot {
   end: string; // "HH:MM"
 }
 
+/**
+ * UI compatibility DTO for one course enrollment.
+ *
+ * Despite the historical name, this is not a raw `students` table row:
+ * `id` is `enrollments.enrollment_id` and `person_id` is
+ * `students.student_id`. The server database adapter assembles the remaining
+ * fields from normalized class, level, and schedule relations.
+ */
 export interface Student {
   id: string;
   name: string;
@@ -69,6 +77,7 @@ export interface Student {
   person_id?: string | null;
 }
 
+/** Attendance for one enrollment; `student_id` carries an `enrollment_id`. */
 export interface AttendanceRow {
   id: string;
   student_id: string;
@@ -79,6 +88,7 @@ export interface AttendanceRow {
   created_at: string;
 }
 
+/** Tuition income for one enrollment; `student_id` carries an `enrollment_id`. */
 export interface TuitionPayment {
   id: string;
   student_id: string;
@@ -95,6 +105,10 @@ export type LearningAttachment = {
   label?: string | null;
 };
 
+/**
+ * Learning note for one enrollment or an entire class. When present,
+ * `student_id` carries an `enrollment_id`.
+ */
 export interface LearningLog {
   id: string;
   student_id: string | null;
@@ -270,6 +284,7 @@ export function groupByPerson(students: Student[]): PersonGroup[] {
 }
 
 /** ===== Lịch sử đổi lịch học ===== */
+/** Schedule history for one enrollment; `student_id` carries an `enrollment_id`. */
 export interface ScheduleChange {
   id: string;
   student_id: string;

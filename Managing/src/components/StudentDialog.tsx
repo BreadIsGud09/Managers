@@ -26,8 +26,8 @@ import {
   type ScheduleSlot,
   type Student,
 
-} from "@/lib/shared";
-import { upsertStudent } from "@/lib/students.functions";
+} from "@/Shared/shared";
+import { upsertStudent } from "@/server-functions/enrollment.functions";
 
 type FormState = Omit<Student, "id" | "schedule_days" | "sessions_per_day" | "status"> & {
   id?: string;

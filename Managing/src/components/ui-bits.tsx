@@ -1,5 +1,5 @@
 import { Music, Palette, Sparkles } from "lucide-react";
-import type { ClassType, StudentStatus } from "@/lib/shared";
+import type { ClassType, StudentStatus } from "@/Shared/shared";
 import { Badge } from "@/components/ui/badge";
 
 export function classIcon(c: ClassType) {

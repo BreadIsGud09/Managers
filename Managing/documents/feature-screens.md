@@ -1,8 +1,8 @@
-# Feature Screen Guide
+# Feature screen guide
 
 Each file in this directory is one top-level product feature displayed by
 `AppTabs`. The tab modules are lazy-loaded, so avoid importing one feature screen
-from another feature screen; shared code belongs in `src/lib` or a deliberately
+from another feature screen; shared code belongs in `src/Shared` or a deliberately
 shared component.
 
 ## Recommended internal layout
@@ -31,7 +31,7 @@ The orchestrating tab should answer three questions at a glance:
 - Keep screen filters in the top-level feature component.
 - Keep server state in TanStack Query, not duplicated in `useState`.
 - Keep cross-feature business calculations as pure functions in
-  `src/lib/shared.ts`.
+  `src/Shared/shared.ts`.
 - Do not create a class-based service for React state. Server functions already
   provide the remote use-case API.
 

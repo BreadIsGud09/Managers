@@ -34,7 +34,7 @@ import {
   type ScheduleChange,
   type ScheduleSlot,
   type Student,
-} from "@/lib/shared";
+} from "@/Shared/shared";
 import {
   changeSchedule,
   deleteReserveDates,
@@ -44,7 +44,7 @@ import {
   listStudents,
   replaceReserveDates,
   setAttendance,
-} from "@/lib/students.functions";
+} from "@/server-functions/enrollment.functions";
 
 
 type TimeRow = { label: string; start: string; end: string; ca: "sang" | "chieu" };

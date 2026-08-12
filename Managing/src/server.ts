@@ -1,12 +1,25 @@
-import "./lib/error-capture";
+/**
+ * Outermost production/SSR fetch entry.
+ *
+ * This file does not contain application routes or database operations. It
+ * delegates every request to TanStack Start's generated server entry, then
+ * converts a specific swallowed h3 JSON 500 into the application's readable
+ * HTML error page. `vite.config.ts` selects it as the custom server entry.
+ *
+ * Global request and server-function middleware are configured separately in
+ * `src/start.ts`.
+ */
+import "./Shared/error-capture";
 
-import { consumeLastCapturedError } from "./lib/error-capture";
-import { renderErrorPage } from "./lib/error-page";
+import { consumeLastCapturedError } from "./Shared/error-capture";
+import { renderErrorPage } from "./Shared/error-page";
 
+/** Minimal interface implemented by TanStack Start's generated fetch handler. */
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
+// Cache the dynamic import once per server process/cold-start instance.
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
@@ -44,6 +57,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+// The runtime expects a plain object with a Fetch API-compatible `fetch` method;
+// no server class or manually managed HTTP listener is needed.
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {

@@ -27,8 +27,8 @@ import {
   type ClassType,
   type ScheduleSlot,
   type Student,
-} from "@/lib/shared";
-import { deleteAttendance, listAttendance, listAttendanceByStudent, listAttendanceRange, listStudents, setAttendance } from "@/lib/students.functions";
+} from "@/Shared/shared";
+import { deleteAttendance, listAttendance, listAttendanceByStudent, listAttendanceRange, listStudents, setAttendance } from "@/server-functions/enrollment.functions";
 import { Badge } from "@/components/ui/badge";
 
 export function AttendanceTab() {

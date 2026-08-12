@@ -27,56 +27,57 @@ than separate pages. Feature UI is split across `src/components/tabs`.
 ```text
 Browser UI (`src/components`, `src/routes`)
   -> TanStack Query and `useServerFn`
-  -> TanStack Start server functions (`src/lib/*.functions.ts`)
-  -> server-only Supabase client (`src/integrations/supabase/client.server.ts`)
+  -> TanStack Start server functions (`src/server-functions/*.functions.ts`)
+  -> normalized data layer (`src/server/database`)
+  -> server-only Supabase client (`src/server/database/supabase-admin.server.ts`)
   -> Supabase Data API
   -> PostgreSQL tables created by `supabase/migrations`
 ```
 
 Important directories and files:
 
-| Path | Responsibility |
-| --- | --- |
-| `src/routes/index.tsx` | Route metadata and the main page shell |
-| `src/components/app/AppTabs.tsx` | Responsive navigation and lazy feature boundaries |
-| `src/components/settings` | Settings-specific UI and data flows |
-| `src/components/tabs` | Feature screens |
-| `src/components/ui` | Reusable Radix/shadcn-style UI primitives |
-| `src/lib/*.functions.ts` | Server-side queries, validation, and mutations |
-| `src/lib/shared.ts` | Shared scheduling and date calculations |
-| `src/integrations/supabase` | Browser, server, auth, and generated DB types |
-| `src/server.ts` | TanStack server entry and SSR error normalization |
-| `src/router.tsx` | Router and Query Client creation |
-| `src/styles.css` | Global theme and Tailwind styles |
-| `supabase/migrations` | Ordered PostgreSQL schema history |
-| `vite.config.ts` | TanStack/Lovable Vite configuration |
+| Path                                  | Responsibility                                                              |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| `src/routes/index.tsx`                | Route metadata and the main page shell                                      |
+| `src/components/app/AppTabs.tsx`      | Responsive navigation and lazy feature boundaries                           |
+| `src/components/settings`             | Settings-specific UI and data flows                                         |
+| `src/components/tabs`                 | Feature screens                                                             |
+| `src/components/ui`                   | Reusable Radix/shadcn-style UI primitives                                   |
+| `src/server-functions/*.functions.ts` | Browser-callable operations and Zod request validation                      |
+| `src/server/database`                 | Privileged Supabase access and normalized relation mapping                  |
+| `src/Shared`                          | Shared DTO types, pure calculations, exports, UI helpers, and error helpers |
+| `src/integrations/supabase`           | Browser client, auth middleware, and generated DB types                     |
+| `src/server.ts`                       | TanStack server entry and SSR error normalization                           |
+| `src/start.ts`                        | Global TanStack request/server-function middleware registration             |
+| `src/router.tsx`                      | Router and Query Client creation                                            |
+| `src/styles.css`                      | Global theme and Tailwind styles                                            |
+| `supabase/migrations`                 | Ordered PostgreSQL schema history                                           |
+| `vite.config.ts`                      | TanStack/Lovable Vite configuration                                         |
 
 ## 4. Database Design
 
-The database uses the `public` schema and UUID primary keys for most records.
-Row Level Security (RLS) is enabled. Current application operations use the
-server-side service-role client, which bypasses RLS.
+The database uses a normalized relational design in the `public` schema with
+numeric identity keys. Current application operations use a server-side secret
+client, which bypasses RLS.
 
-| Table | Purpose | Main relationships |
-| --- | --- | --- |
-| `people` | Person profile shared across courses | Parent of `students` |
-| `students` | Course enrollment, class, tuition, dates, status, schedule | Optional `person_id -> people.id` |
-| `attendance` | Daily attendance, reserve/makeup dates, notes | `student_id -> students.id`, cascade delete |
-| `class_schedule` | General weekly schedule by class | Independent reference data |
-| `schedule_changes` | History of changes to a student's schedule | `student_id -> students.id`, cascade delete |
-| `learning_logs` | Class-wide or student-specific learning notes and attachments | Optional `student_id -> students.id` |
-| `tuition_payments` | Payment amount, period, date, and installment number | `student_id -> students.id`, cascade delete |
-| `expense_categories` | Reusable finance categories and defaults | Independent reference data |
-| `finance_entries` | Monthly income and expenses | Stores optional course/student labels |
-| `telegram_settings` | Telegram bot token and group chat ID | Singleton row with `id = 1` |
+| Area                | Tables                                                                   | Meaning                                                            |
+| ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| People              | `parents`, `students`                                                    | Parent/contact and reusable student identity                       |
+| Courses             | `classes`, `class_levels`, `enrollments`                                 | Class definition, level, and one student's course enrollment       |
+| Scheduling          | `class_schedules`, `enrollment_schedules`, `enrollment_schedule_changes` | Reusable weekly slots, assigned slots, and schedule history        |
+| Attendance/learning | `attendance_records`, `learning_logs`                                    | Enrollment-specific attendance and class/enrollment learning notes |
+| Income              | `income_categories`, `income_transactions`                               | Tuition payments and manual income                                 |
+| Expenses            | `expense_categories`, `expense_transactions`                             | Reusable expense categories and expense records                    |
+| Staff               | `teachers`                                                               | Teacher identity and contact information                           |
+| Notifications       | `notification_settings`                                                  | Singleton Telegram configuration                                   |
 
-Important structured fields:
+The UI's `Student` DTO is a compatibility view of an enrollment, not one raw
+`students` table row. `Student.id` carries `enrollment_id`; `Student.person_id`
+carries `student_id`. See [architecture.md](./architecture.md) and
+[database-layer.md](./database-layer.md) before changing those identifiers.
 
-- `students.schedule_slots`: JSON weekly time slots.
-- `students.schedule_days`: integer array of weekdays.
-- `learning_logs.attachments`: JSON image, video, or link metadata.
-- `schedule_changes.old_slots/new_slots`: JSON schedule snapshots.
-- PostgreSQL enums constrain class, student status, and attendance status.
+Important structured fields include `learning_logs.attachments` and the
+old/new schedule snapshots on `enrollment_schedule_changes`.
 
 `src/integrations/supabase/types.ts` is the generated TypeScript view of the
 database schema. Regenerate it after schema changes.
@@ -84,8 +85,7 @@ database schema. Regenerate it after schema changes.
 ## 5. Database Configuration
 
 Local credentials belong in `.env.local`. This file is ignored by Git through
-the `*.local` rule. The cloned `.env` contains the original project's public
-configuration; `.env.local` overrides it for local development.
+the `*.local` rule.
 
 Required variables:
 
@@ -109,10 +109,14 @@ Rules:
 
 Connection code:
 
-- `client.ts` creates the browser client with the publishable key.
-- `client.server.ts` creates the privileged server client.
-- `auth-middleware.ts` validates a Supabase bearer token for authenticated server calls.
-- Current feature server functions call `client.server.ts` directly.
+- `src/integrations/supabase/client.ts` lazily creates the browser client with
+  the publishable key.
+- `src/integrations/supabase/auth-attacher.ts` forwards the browser session token
+  on server-function calls.
+- `src/integrations/supabase/auth-middleware.ts` defines the server token
+  validator, but privileged feature functions do not currently register it.
+- `src/server/database/supabase-admin.server.ts` lazily creates the privileged
+  server client from the secret/service-role key.
 
 The linked Supabase project reference is also stored in
 `supabase/config.toml`. It must match the intended remote project before a
@@ -120,9 +124,21 @@ migration push.
 
 ## 6. Migrations
 
-Migration files are timestamped and must be applied in filename order. They
-create the enums, tables, foreign keys, indexes, RLS configuration, and initial
-reference data.
+The normalized base tables already existed in the target project. The active
+repository history currently contains two applied migrations:
+
+1. `20260812121658_support_existing_manager_application_features.sql` adds the
+   compatibility columns/tables, triggers, access policies, and grants needed by
+   the existing UI.
+2. `20260812125026_add_normalized_relationship_indexes.sql` adds relationship
+   indexes identified by the Supabase performance advisor.
+
+The historical flat-schema migrations are no longer present in the current
+`supabase` directory. The old-to-new row transfer was executed separately and
+is not a third schema migration.
+
+Migration files are timestamped and must be reviewed and applied in filename
+order.
 
 ```powershell
 npx supabase login
@@ -141,22 +157,22 @@ Review generated changes before committing them.
 
 ## 7. Main Libraries
 
-| Library | Use |
-| --- | --- |
-| `@tanstack/react-start` | Server functions and full-stack runtime |
+| Library                  | Use                                          |
+| ------------------------ | -------------------------------------------- |
+| `@tanstack/react-start`  | Server functions and full-stack runtime      |
 | `@tanstack/react-router` | Routing, metadata, error and not-found pages |
-| `@tanstack/react-query` | Query cache, loading state, mutations |
-| `@supabase/supabase-js` | Database and authentication clients |
-| `zod` | Server-function input validation |
-| `react-hook-form` | Form state |
-| `@hookform/resolvers` | Form validation integration |
-| Radix UI packages | Accessible UI primitives |
-| `lucide-react` | Icons |
-| `sonner` | Toast notifications |
-| `date-fns` | Date utilities |
-| `recharts` | Charts |
-| `xlsx` | Spreadsheet import/export |
-| `html-to-image` | Exporting rendered UI as images |
+| `@tanstack/react-query`  | Query cache, loading state, mutations        |
+| `@supabase/supabase-js`  | Database and authentication clients          |
+| `zod`                    | Server-function input validation             |
+| `react-hook-form`        | Form state                                   |
+| `@hookform/resolvers`    | Form validation integration                  |
+| Radix UI packages        | Accessible UI primitives                     |
+| `lucide-react`           | Icons                                        |
+| `sonner`                 | Toast notifications                          |
+| `date-fns`               | Date utilities                               |
+| `recharts`               | Charts                                       |
+| `xlsx`                   | Spreadsheet import/export                    |
+| `html-to-image`          | Exporting rendered UI as images              |
 
 ## 8. Commands
 
@@ -179,13 +195,13 @@ On Windows PowerShell systems that block `npm.ps1`, use `npm.cmd`, for example
    Do not expose this application publicly until authentication and authorization
    are enforced on every privileged server function.
 2. The service-role key bypasses all RLS policies. Keep it server-only.
-3. Telegram bot tokens are sensitive. They are stored in `telegram_settings` and
+3. Telegram bot tokens are sensitive. They are stored in `notification_settings` and
    must only be read through protected server code.
 4. Do not edit generated `src/routeTree.gen.ts` manually.
 5. Do not duplicate plugins already supplied by
    `@lovable.dev/vite-tanstack-config`; the comments in `vite.config.ts` list them.
 6. Schedule and course-end calculations are business-critical. Test changes to
-   `src/lib/shared.ts` against reserve days, multiple daily sessions, and schedule
+   `src/Shared/shared.ts` against reserve days, multiple daily sessions, and schedule
    changes.
 7. Keep Vietnamese source and SQL files encoded as UTF-8.
 

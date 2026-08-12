@@ -31,7 +31,7 @@ export const Route = createFileRoute("/")({
  */
 function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
+    <div className="min-h-screen bg-linear-to-br from-background via-background to-muted/30">
       <Toaster position="top-right" richColors />
       <header className="border-b bg-card/80 backdrop-blur">
         <div className="container mx-auto flex items-center gap-3 px-4 py-4">
